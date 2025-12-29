@@ -7,10 +7,14 @@ import {
   TrendingUp,
   Activity,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Heart,
+  // Fix: Added missing ShieldCheck import to fix error on line 116
+  ShieldCheck
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Appointment, AppointmentStatus } from '../types';
+import { MOCK_DOCTORS } from '../constants';
 
 interface DashboardProps {
   patientsCount: number;
@@ -29,13 +33,14 @@ const data = [
 const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) => {
   const confirmedCount = appointments.filter(a => a.status === AppointmentStatus.CONFIRMED).length;
   const pendingCount = appointments.filter(a => a.status === AppointmentStatus.SCHEDULED).length;
+  const doctorsCount = MOCK_DOCTORS.length;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Bem-vindo, Dr. Ricardo</h1>
-          <p className="text-slate-500 mt-1">Aqui está um resumo do dia hoje.</p>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Painel de Controle</h1>
+          <p className="text-slate-500 mt-1">Resumo operacional da clínica para hoje.</p>
         </div>
         <div className="flex items-center space-x-2 text-sm bg-white border border-slate-200 px-4 py-2 rounded-full shadow-sm">
           <Calendar size={16} className="text-blue-500" />
@@ -43,7 +48,6 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           icon={<Users className="text-blue-600" size={24} />}
@@ -56,19 +60,19 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
           icon={<CheckCircle2 className="text-emerald-600" size={24} />}
           label="Confirmados Hoje"
           value={confirmedCount.toString()}
-          trend="85% taxa comparecimento"
+          trend="Atendimentos ativos"
           bgColor="bg-emerald-50"
         />
         <StatCard 
-          icon={<Clock className="text-amber-600" size={24} />}
-          label="Pendentes"
-          value={pendingCount.toString()}
-          trend="Próximas 4 horas"
-          bgColor="bg-amber-50"
+          icon={<Heart className="text-rose-600" size={24} />}
+          label="Corpo Clínico"
+          value={doctorsCount.toString()}
+          trend="Médicos ativos"
+          bgColor="bg-rose-50"
         />
         <StatCard 
           icon={<Activity className="text-purple-600" size={24} />}
-          label="Atendimentos Realizados"
+          label="Total Atendimentos"
           value="452"
           trend="+5% vs mês passado"
           bgColor="bg-purple-50"
@@ -76,17 +80,12 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Chart */}
-        <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+        <div className="lg:col-span-2 bg-white p-8 rounded-[32px] shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h3 className="text-lg font-bold text-slate-800">Fluxo de Atendimentos</h3>
-              <p className="text-sm text-slate-500">Visualização semanal de consultas</p>
+              <h3 className="text-lg font-bold text-slate-800">Fluxo Semanal</h3>
+              <p className="text-sm text-slate-500">Volume de pacientes atendidos</p>
             </div>
-            <select className="text-sm border border-slate-200 rounded-lg px-3 py-1 focus:ring-2 focus:ring-blue-500 outline-none">
-              <option>Últimos 7 dias</option>
-              <option>Último mês</option>
-            </select>
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -101,7 +100,7 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
                 <Tooltip 
-                  contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}}
+                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}}
                 />
                 <Area type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
               </AreaChart>
@@ -109,43 +108,36 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
           </div>
         </div>
 
-        {/* Notifications / Alerts */}
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-bold text-slate-800 mb-6">Alertas & Notificações</h3>
+        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200">
+          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center">
+            <AlertCircle size={20} className="mr-2 text-blue-600" />
+            Alertas Críticos
+          </h3>
           <div className="space-y-6">
-            <div className="flex space-x-4">
-              <div className="shrink-0 w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
-                <AlertCircle size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Exame de João Silva</p>
-                <p className="text-xs text-slate-500">Resultado de Hemograma disponível para revisão.</p>
-                <span className="text-[10px] text-slate-400 mt-1 block">Há 2 horas</span>
-              </div>
-            </div>
-            <div className="flex space-x-4">
-              <div className="shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
-                <Calendar size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Novo Agendamento</p>
-                <p className="text-xs text-slate-500">Maria Oliveira marcou um retorno para amanhã.</p>
-                <span className="text-[10px] text-slate-400 mt-1 block">Há 5 horas</span>
-              </div>
-            </div>
-            <div className="flex space-x-4">
-              <div className="shrink-0 w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
-                <TrendingUp size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Relatório Mensal</p>
-                <p className="text-xs text-slate-500">Seu resumo de faturamento está pronto.</p>
-                <span className="text-[10px] text-slate-400 mt-1 block">Ontem</span>
-              </div>
-            </div>
+            <AlertItem 
+              icon={<ShieldCheck size={20} className="text-blue-600" />}
+              title="Backup Concluído"
+              desc="Sincronização com nuvem realizada com sucesso."
+              time="Há 2 horas"
+              bgColor="bg-blue-50"
+            />
+            <AlertItem 
+              icon={<AlertCircle size={20} className="text-amber-600" />}
+              title="Exame Pendente"
+              desc="João Silva: Resultados prontos para revisão."
+              time="Há 4 horas"
+              bgColor="bg-amber-50"
+            />
+            <AlertItem 
+              icon={<TrendingUp size={20} className="text-emerald-600" />}
+              title="Faturamento"
+              desc="Relatório mensal pronto para análise."
+              time="Há 1 dia"
+              bgColor="bg-emerald-50"
+            />
           </div>
-          <button className="w-full mt-8 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-            Ver todas notificações
+          <button className="w-full mt-8 py-3 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-2xl transition-colors border border-dashed border-blue-200">
+            Ver Central de Mensagens
           </button>
         </div>
       </div>
@@ -160,14 +152,27 @@ const StatCard: React.FC<{
   trend: string;
   bgColor: string;
 }> = ({ icon, label, value, trend, bgColor }) => (
-  <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
-    <div className={`w-12 h-12 ${bgColor} rounded-2xl flex items-center justify-center mb-4`}>
+  <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-200 hover:shadow-md transition-all group">
+    <div className={`w-12 h-12 ${bgColor} rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
       {icon}
     </div>
-    <p className="text-sm font-medium text-slate-500">{label}</p>
+    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">{label}</p>
     <div className="flex items-end space-x-2 mt-1">
-      <h4 className="text-2xl font-bold text-slate-800">{value}</h4>
-      <span className="text-xs font-semibold text-emerald-500 mb-1">{trend}</span>
+      <h4 className="text-2xl font-black text-slate-800">{value}</h4>
+      <span className="text-[10px] font-black text-emerald-500 mb-1 uppercase">{trend}</span>
+    </div>
+  </div>
+);
+
+const AlertItem: React.FC<{ icon: React.ReactNode; title: string; desc: string; time: string; bgColor: string }> = ({ icon, title, desc, time, bgColor }) => (
+  <div className="flex space-x-4">
+    <div className={`shrink-0 w-10 h-10 ${bgColor} rounded-xl flex items-center justify-center`}>
+      {icon}
+    </div>
+    <div className="flex-1 overflow-hidden">
+      <p className="text-sm font-bold text-slate-800 truncate">{title}</p>
+      <p className="text-xs text-slate-500 truncate">{desc}</p>
+      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 block">{time}</span>
     </div>
   </div>
 );

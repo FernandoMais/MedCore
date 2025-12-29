@@ -34,7 +34,6 @@ const App: React.FC = () => {
   const [doctors, setDoctors] = useState<Doctor[]>(MOCK_DOCTORS);
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
 
-  // Persistence simulation (check operability)
   useEffect(() => {
     console.log("MedCore Pro initialized. All modules operational.");
   }, []);
@@ -66,11 +65,10 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-      {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
         <div className="p-6">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-inner animate-pulse-slow">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-inner animate-pulse">
               <ShieldCheck size={24} />
             </div>
             <div>
@@ -105,9 +103,7 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Header */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-30">
           <div className="flex items-center space-x-4 flex-1">
             <div className="relative w-96 group">
@@ -120,7 +116,7 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 mr-4">
+            <div className="hidden md:flex items-center space-x-2 mr-4">
                <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sistema Operante</span>
             </div>
@@ -138,7 +134,6 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        {/* Dynamic View Content */}
         <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50">
           {currentView === 'dashboard' && <Dashboard patientsCount={patients.length} appointments={appointments} />}
           {currentView === 'agenda' && <Agenda appointments={appointments} startConsultation={startConsultation} />}
@@ -149,6 +144,7 @@ const App: React.FC = () => {
               appointmentId={activeAppointmentId} 
               appointments={appointments}
               patients={patients}
+              doctors={doctors}
               onFinish={() => setCurrentView('agenda')}
             />
           )}
