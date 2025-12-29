@@ -14,6 +14,23 @@ export enum Gender {
   OTHER = 'Outro'
 }
 
+export interface DoctorSchedule {
+  dayOfWeek: 'Segunda' | 'Terça' | 'Quarta' | 'Quinta' | 'Sexta' | 'Sábado' | 'Domingo';
+  startTime: string;
+  endTime: string;
+}
+
+export interface Doctor {
+  id: string;
+  name: string;
+  crm: string;
+  specialty: string;
+  email: string;
+  phone: string;
+  avatar?: string;
+  availableTimes: DoctorSchedule[];
+}
+
 export interface Patient {
   id: string;
   name: string;
@@ -22,9 +39,12 @@ export interface Patient {
   cpf: string;
   email: string;
   phone: string;
+  address: string;
   healthInsurance?: string;
+  bloodType?: string;
   allergies: string[];
   history: string;
+  preExistingConditions: string[];
   createdAt: string;
 }
 
