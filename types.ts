@@ -1,4 +1,18 @@
 
+export enum UserRole {
+  ADMIN = 'admin',
+  DOCTOR = 'doctor'
+}
+
+export interface User {
+  id: string;
+  username: string;
+  password: string; // Em produção, usar hash
+  name: string;
+  role: UserRole;
+  doctorId?: string; // Vínculo se o usuário for um médico
+}
+
 export enum AppointmentStatus {
   SCHEDULED = 'Agendado',
   CONFIRMED = 'Confirmado',
@@ -31,6 +45,16 @@ export interface Doctor {
   availableTimes: DoctorSchedule[];
 }
 
+export interface MedicalFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  date: string;
+  url: string; // Base64 ou URL fictícia para este ambiente
+  category: 'Exame' | 'Receita' | 'Laudo' | 'Outros';
+}
+
 export interface Patient {
   id: string;
   name: string;
@@ -46,6 +70,8 @@ export interface Patient {
   history: string;
   preExistingConditions: string[];
   createdAt: string;
+  primaryDoctorId: string; // Vínculo principal para controle de acesso
+  files: MedicalFile[]; // Nova lista de documentos
 }
 
 export interface Appointment {
@@ -77,14 +103,4 @@ export interface Prescription {
   dosage: string;
   frequency: string;
   duration: string;
-}
-
-export interface AnamnesisForm {
-  id: string;
-  patientId: string;
-  date: string;
-  questions: {
-    question: string;
-    answer: string;
-  }[];
 }

@@ -26,19 +26,6 @@ export const MOCK_DOCTORS: Doctor[] = [
       { dayOfWeek: 'Terça', startTime: '09:00', endTime: '17:00' },
       { dayOfWeek: 'Quinta', startTime: '09:00', endTime: '17:00' }
     ]
-  },
-  {
-    id: 'd3',
-    name: 'Dr. Paulo Mendes',
-    crm: '112233/SP',
-    specialty: 'Clínica Geral',
-    email: 'paulo@medcore.com',
-    phone: '(11) 95555-4444',
-    availableTimes: [
-      { dayOfWeek: 'Segunda', startTime: '13:00', endTime: '20:00' },
-      { dayOfWeek: 'Terça', startTime: '13:00', endTime: '20:00' },
-      { dayOfWeek: 'Quarta', startTime: '13:00', endTime: '20:00' }
-    ]
   }
 ];
 
@@ -57,7 +44,9 @@ export const MOCK_PATIENTS: Patient[] = [
     allergies: ['Penicilina', 'Dipirona'],
     history: 'Hipertensão leve controlada.',
     preExistingConditions: ['Hipertensão', 'Obesidade Grau I'],
-    createdAt: '2023-01-01'
+    createdAt: '2023-01-01',
+    primaryDoctorId: 'd1',
+    files: []
   },
   {
     id: '2',
@@ -73,7 +62,9 @@ export const MOCK_PATIENTS: Patient[] = [
     allergies: [],
     history: 'Histórico de asma na infância.',
     preExistingConditions: ['Asma'],
-    createdAt: '2023-02-15'
+    createdAt: '2023-02-15',
+    primaryDoctorId: 'd1',
+    files: []
   },
   {
     id: '3',
@@ -89,7 +80,9 @@ export const MOCK_PATIENTS: Patient[] = [
     allergies: ['Iodo', 'Frutos do Mar'],
     history: 'Paciente diabético tipo 2.',
     preExistingConditions: ['Diabetes Mellitus Tipo 2', 'Glaucoma'],
-    createdAt: '2024-01-10'
+    createdAt: '2024-01-10',
+    primaryDoctorId: 'd2',
+    files: []
   }
 ];
 
@@ -100,26 +93,6 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     doctorId: 'd1',
     date: new Date().toISOString().split('T')[0],
     time: '09:00',
-    type: 'Consulta',
-    status: AppointmentStatus.CONFIRMED,
-    room: 'Consultório 01'
-  },
-  {
-    id: 'a2',
-    patientId: '2',
-    doctorId: 'd1',
-    date: new Date().toISOString().split('T')[0],
-    time: '10:30',
-    type: 'Telemedicina',
-    status: AppointmentStatus.SCHEDULED,
-    room: 'Virtual'
-  },
-  {
-    id: 'a3',
-    patientId: '3',
-    doctorId: 'd1',
-    date: new Date().toISOString().split('T')[0],
-    time: '14:00',
     type: 'Consulta',
     status: AppointmentStatus.CONFIRMED,
     room: 'Consultório 01'
