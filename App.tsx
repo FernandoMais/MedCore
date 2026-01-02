@@ -20,7 +20,7 @@ import {
   Upload,
   User as UserIcon
 } from 'lucide-react';
-import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole } from './types';
+import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus } from './types';
 import { storage } from './services/storage';
 import Dashboard from './components/Dashboard';
 import PatientManager from './components/PatientManager';
@@ -38,6 +38,7 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
 
+  // Persistência automática em toda alteração do DB
   useEffect(() => {
     storage.save(db);
   }, [db]);
@@ -46,7 +47,6 @@ const App: React.FC = () => {
     return <Login users={db.users} onLogin={setCurrentUser} />;
   }
 
-  // Filtragem de dados baseada no papel
   const filteredPatients = currentUser.role === UserRole.ADMIN 
     ? db.patients 
     : db.patients.filter(p => p.primaryDoctorId === currentUser.doctorId);
@@ -60,6 +60,43 @@ const App: React.FC = () => {
     setCurrentView('consultation');
   };
 
+  const handleFinishConsultation = (evolutionData?: { diagnosis: string; conduct: string; complaint: string }) => {
+    if (activeAppointmentId) {
+      const appointment = db.appointments.find(a => a.id === activeAppointmentId);
+      
+      if (appointment) {
+        const dateStr = new Date().toLocaleDateString('pt-BR');
+        const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        
+        // Formatação padronizada para o parser de histórico
+        const newEntry = `\n\n[DATA: ${dateStr} às ${timeStr}]\nQUEIXA: ${evolutionData?.complaint || 'N/A'}\nDIAGNÓSTICO: ${evolutionData?.diagnosis || 'N/A'}\nCONDUTA: ${evolutionData?.conduct || 'N/A'}\n`;
+        
+        // Atualização atômica do estado para garantir persistência
+        setDb(prev => {
+          const updatedPatients = prev.patients.map(p => 
+            p.id === appointment.patientId 
+              ? { ...p, history: (p.history || '') + newEntry } 
+              : p
+          );
+          
+          const updatedAppointments = prev.appointments.map(a => 
+            a.id === activeAppointmentId 
+              ? { ...a, status: AppointmentStatus.FINISHED } 
+              : a
+          );
+
+          return {
+            ...prev,
+            patients: updatedPatients,
+            appointments: updatedAppointments
+          };
+        });
+      }
+    }
+    setActiveAppointmentId(null);
+    setCurrentView('agenda');
+  };
+
   const SidebarItem: React.FC<{ 
     view: View; 
     icon: React.ReactNode; 
@@ -67,7 +104,6 @@ const App: React.FC = () => {
     adminOnly?: boolean;
   }> = ({ view, icon, label, adminOnly }) => {
     if (adminOnly && currentUser.role !== UserRole.ADMIN) return null;
-    
     return (
       <button
         onClick={() => setCurrentView(view)}
@@ -87,8 +123,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 no-print">
         <div className="p-6">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-inner">
@@ -109,7 +144,6 @@ const App: React.FC = () => {
           <SidebarItem view="patients" icon={<Users size={18} />} label="Meus Pacientes" />
           <SidebarItem view="doctors" icon={<Heart size={18} />} label="Corpo Clínico" adminOnly />
           <SidebarItem view="backups" icon={<Download size={18} />} label="Exportar Dados" adminOnly />
-          <SidebarItem view="settings" icon={<Settings size={18} />} label="Configurações" adminOnly />
         </nav>
 
         <div className="p-4 border-t border-slate-200 bg-slate-50/50">
@@ -120,13 +154,13 @@ const App: React.FC = () => {
             <div className="flex-1 overflow-hidden">
               <p className="text-xs font-bold truncate text-slate-800">{currentUser.name}</p>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-                {currentUser.role === UserRole.ADMIN ? 'ADMIN' : 'MÉDICO TITULAR'}
+                {currentUser.role === UserRole.ADMIN ? 'ADMIN' : 'MÉDICO'}
               </p>
             </div>
           </div>
           <button 
             onClick={() => setCurrentUser(null)}
-            className="w-full flex items-center space-x-3 px-4 py-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all group"
+            className="w-full flex items-center space-x-3 px-4 py-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
           >
             <LogOut size={18} />
             <span className="font-bold text-xs uppercase tracking-widest">Sair</span>
@@ -134,30 +168,17 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-30">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-30 no-print">
           <div className="flex items-center space-x-4 flex-1">
             <div className="relative w-96 group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
                 type="text" 
-                placeholder="Busca inteligente..." 
-                className="w-full pl-10 pr-4 py-2 rounded-full border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-sm bg-slate-50"
+                placeholder="Busca inteligente de prontuários..." 
+                className="w-full pl-10 pr-4 py-2 rounded-full border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-sm bg-slate-50 font-medium"
               />
             </div>
-          </div>
-          <div className="flex items-center space-x-4">
-            <button className="p-2.5 text-slate-500 hover:bg-slate-100 rounded-xl relative">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
-            <button 
-              onClick={() => setCurrentView('agenda')}
-              className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-blue-200"
-            >
-              <span>+ NOVA CONSULTA</span>
-            </button>
           </div>
         </header>
 
@@ -194,7 +215,7 @@ const App: React.FC = () => {
               appointments={db.appointments}
               patients={db.patients}
               doctors={db.doctors}
-              onFinish={() => setCurrentView('agenda')}
+              onFinish={handleFinishConsultation}
             />
           )}
         </div>

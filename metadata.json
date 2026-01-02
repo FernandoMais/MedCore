@@ -1,6 +1,6 @@
 {
-  "name": "MedCore Pro - Sistema de Gestão Clínica",
-  "description": "Uma plataforma completa para gestão de clínicas médicas, integrando prontuário eletrônico (PEP), agenda inteligente, anamnese digital e assistência médica por IA.",
+  "name": "MedixSystem Pro - Sistema de Gestão Clínica",
+  "description": "Uma plataforma completa para gestão de clínicas médicas, integrando prontuário eletrônico (PEP), agenda inteligente, anamnese digital e assistência médica por IA. O acesso à câmera e microfone é utilizado exclusivamente para consultas de telemedicina e registro de anexos.",
   "requestFramePermissions": [
     "camera",
     "microphone"

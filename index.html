@@ -10,40 +10,57 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         
-        /* Estilos de Impressão (Exportação PDF) */
+        /* Estilos de Impressão Profissionais */
         @media print {
-            body { background: white !important; }
-            aside, header, nav, button, .no-print { display: none !important; }
-            .print-only { display: block !important; }
-            main { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow: visible !important; }
-            .bg-slate-50, .bg-slate-50\/50, .bg-blue-600, .bg-slate-900, .bg-slate-50\/30 { background: white !important; color: black !important; }
-            .border, .border-slate-200, .border-slate-100 { border: 1px solid #e2e8f0 !important; }
-            .shadow-sm, .shadow-xl, .shadow-2xl { box-shadow: none !important; }
-            .rounded-[40px], .rounded-[32px], .rounded-3xl, .rounded-2xl { border-radius: 8px !important; }
-            .animate-in { animation: none !important; }
-            .overflow-y-auto { overflow: visible !important; height: auto !important; }
-            
-            /* Ajustes específicos para o prontuário */
-            .printable-document { 
-                padding: 0 !important; 
-                max-width: 100% !important; 
-                border: none !important; 
-                position: static !important;
-                box-shadow: none !important;
+            @page {
+                margin: 20mm;
+                size: auto;
             }
-            .printable-document > div { border: none !important; padding: 20px 0 !important; }
+            body { 
+                background: white !important; 
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            aside, header, nav, button, .no-print, #sidebar, .tabs-navigation { display: none !important; }
             
-            /* Destaque de Alertas na Impressão */
+            .print-only { display: block !important; }
+            
+            main { 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                width: 100% !important; 
+                display: block !important;
+                overflow: visible !important;
+            }
+
+            .printable-document { 
+                display: block !important;
+                position: relative !important;
+                width: 100% !important;
+                border: none !important;
+                box-shadow: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* Garante que o histórico longo quebre páginas corretamente */
+            .history-content {
+                page-break-inside: auto;
+                white-space: pre-wrap !important;
+                word-wrap: break-word !important;
+            }
+
+            h1, h2, h3 { color: black !important; page-break-after: avoid; }
+            
             .print-alert { 
                 border: 2px solid #ef4444 !important; 
                 padding: 15px !important;
                 background-color: #fef2f2 !important;
-                -webkit-print-color-adjust: exact;
+                margin-bottom: 20px !important;
             }
-            
-            h1, h2, h3 { color: black !important; }
-            .text-blue-600 { color: #2563eb !important; }
-            .text-red-600 { color: #dc2626 !important; }
+
+            .bg-slate-50 { background-color: #f8fafc !important; }
+            .bg-blue-600 { background-color: #2563eb !important; color: white !important; }
         }
     </style>
 <script type="importmap">
