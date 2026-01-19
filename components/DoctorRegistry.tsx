@@ -21,19 +21,21 @@ import {
   Save,
   Lock,
   User as UserIcon,
-  Shield
+  Shield,
+  Key
 } from 'lucide-react';
 import { Doctor, DoctorSchedule, User, UserRole } from '../types';
 
 interface DoctorRegistryProps {
   doctors: Doctor[];
+  users: User[];
   setDoctors: React.Dispatch<React.SetStateAction<Doctor[]>>;
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
 }
 
 const DAYS_OF_WEEK = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, setDoctors, setUsers }) => {
+const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoctors, setUsers }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -44,6 +46,7 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, setDoctors, se
 
   // Edit State
   const [editFormData, setEditFormData] = useState<Doctor | null>(null);
+  const [editUserFormData, setEditUserFormData] = useState<User | null>(null);
 
   // Form State for NEW Doctor
   const [formData, setFormData] = useState({
@@ -104,6 +107,8 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, setDoctors, se
   const startEditing = () => {
     if (selectedDoctor) {
       setEditFormData({ ...selectedDoctor });
+      const linkedUser = users.find(u => u.doctorId === selectedDoctor.id);
+      setEditUserFormData(linkedUser ? { ...linkedUser } : null);
       setIsEditing(true);
     }
   };
@@ -111,7 +116,13 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, setDoctors, se
   const handleSaveEdit = () => {
     if (editFormData) {
       setDoctors(prev => prev.map(d => d.id === editFormData.id ? editFormData : d));
+      
+      if (editUserFormData) {
+        setUsers(prev => prev.map(u => u.id === editUserFormData.id ? editUserFormData : u));
+      }
+      
       setIsEditing(false);
+      alert("Perfil e credenciais atualizados!");
     }
   };
 
@@ -321,6 +332,56 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, setDoctors, se
                   </div>
                 </div>
 
+                {/* Acesso e Credenciais (Username, Senha, Perfil) */}
+                {isEditing && editUserFormData && (
+                  <div className="space-y-6 animate-in fade-in slide-in-from-top-4">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <Key className="text-blue-600" size={20} />
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Acesso e Credenciais</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Username</label>
+                          <div className="relative">
+                            <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                            <input 
+                              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                              value={editUserFormData.username}
+                              onChange={e => setEditUserFormData({...editUserFormData, username: e.target.value})}
+                            />
+                          </div>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Senha</label>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                            <input 
+                              type="password"
+                              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                              value={editUserFormData.password}
+                              onChange={e => setEditUserFormData({...editUserFormData, password: e.target.value})}
+                            />
+                          </div>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Perfil de Acesso</label>
+                          <div className="relative">
+                            <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                            <select 
+                              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                              value={editUserFormData.role}
+                              onChange={e => setEditUserFormData({...editUserFormData, role: e.target.value as UserRole})}
+                            >
+                              <option value={UserRole.DOCTOR}>MÉDICO</option>
+                              <option value={UserRole.ADMIN}>ADMINISTRADOR</option>
+                            </select>
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Schedule Management */}
                 <div>
                   <div className="flex items-center justify-between mb-8">
@@ -446,7 +507,7 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, setDoctors, se
         )}
       </div>
 
-      {/* Add Doctor Modal (Formulário Original com Design Polido) */}
+      {/* Add Doctor Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 max-h-[90vh]">
@@ -508,11 +569,6 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, setDoctors, se
                       <span className="font-black text-xs uppercase tracking-widest">Administrativo</span>
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-2 italic">
-                    {formData.role === UserRole.ADMIN 
-                      ? "O perfil ADMINISTRATIVO possui acesso total a todos os dados, configurações e backups."
-                      : "O perfil MÉDICO possui acesso restrito apenas aos seus pacientes vinculados."}
-                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
@@ -545,13 +601,6 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, setDoctors, se
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 flex items-center space-x-4">
-                <Clock className="text-blue-600" size={24} />
-                <p className="text-[10px] text-blue-800 font-bold leading-relaxed uppercase tracking-wider">
-                  O VÍNCULO ENTRE PROFISSIONAL E USUÁRIO É CRIADO AUTOMATICAMENTE. APÓS O CADASTRO, O PROFISSIONAL JÁ PODERÁ REALIZAR LOGIN COM AS CREDENCIAIS ACIMA.
-                </p>
               </div>
 
               <div className="pt-6 flex justify-end space-x-4">

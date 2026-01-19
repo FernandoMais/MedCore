@@ -18,10 +18,14 @@ import {
   ShieldCheck,
   Download,
   Upload,
-  User as UserIcon
+  User as UserIcon,
+  Database,
+  Cloud,
+  CloudOff,
+  RefreshCw
 } from 'lucide-react';
 import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus } from './types';
-import { storage } from './services/storage';
+import { storage, AppDatabase } from './services/storage';
 import Dashboard from './components/Dashboard';
 import PatientManager from './components/PatientManager';
 import Agenda from './components/Agenda';
@@ -33,27 +37,83 @@ import Login from './components/Login';
 type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups';
 
 const App: React.FC = () => {
-  const [db, setDb] = useState(storage.init());
+  const [db, setDb] = useState<AppDatabase>(storage.initLocal());
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline'>('offline');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Persistência automática em toda alteração do DB
+  // Boot: Sincronização Inicial com Supabase
   useEffect(() => {
-    storage.save(db);
-  }, [db]);
+    const syncInit = async () => {
+      setIsLoading(true);
+      const cloudData = await storage.fetchFromCloud();
+      
+      setDb(prev => ({
+        ...prev,
+        ...cloudData
+      }));
+      
+      if (cloudData && Object.keys(cloudData).length > 0) {
+        setCloudStatus('connected');
+      }
+      setIsLoading(false);
+    };
+    
+    syncInit();
+  }, []);
 
-  if (!currentUser) {
-    return <Login users={db.users} onLogin={setCurrentUser} />;
+  // Persistência Atômica (Local + Cloud)
+  useEffect(() => {
+    if (isLoading) return;
+    
+    storage.save(db);
+    
+    const cloudSync = async () => {
+      setIsSyncing(true);
+      try {
+        await storage.syncToCloud(db);
+        setCloudStatus('connected');
+      } catch (err) {
+        console.error("Cloud sync failed", err);
+        setCloudStatus('offline');
+      } finally {
+        setTimeout(() => setIsSyncing(false), 1000);
+      }
+    };
+
+    const timer = setTimeout(cloudSync, 2000);
+    return () => clearTimeout(timer);
+  }, [db, isLoading]);
+
+  if (isLoading) {
+    return (
+      <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center">
+        <div className="w-16 h-16 bg-blue-600 rounded-[24px] flex items-center justify-center text-white animate-bounce shadow-2xl shadow-blue-200 mb-6">
+          <ShieldCheck size={32} />
+        </div>
+        <h2 className="text-xl font-black text-slate-800 tracking-tighter">Sincronizando MedCore Cloud</h2>
+        <div className="flex items-center space-x-2 mt-4">
+          <RefreshCw size={14} className="animate-spin text-blue-500" />
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aguardando Supabase...</span>
+        </div>
+      </div>
+    );
   }
 
-  const filteredPatients = currentUser.role === UserRole.ADMIN 
-    ? db.patients 
-    : db.patients.filter(p => p.primaryDoctorId === currentUser.doctorId);
+  if (!currentUser) {
+    return <Login users={db.users || []} onLogin={setCurrentUser} />;
+  }
 
-  const filteredAppointments = currentUser.role === UserRole.ADMIN
-    ? db.appointments
-    : db.appointments.filter(a => a.doctorId === currentUser.doctorId);
+  const filteredPatients = (db.patients || []).filter(p => 
+    currentUser.role === UserRole.ADMIN || p.primaryDoctorId === currentUser.doctorId
+  );
+
+  const filteredAppointments = (db.appointments || []).filter(a => 
+    currentUser.role === UserRole.ADMIN || a.doctorId === currentUser.doctorId
+  );
 
   const startConsultation = (appointmentId: string) => {
     setActiveAppointmentId(appointmentId);
@@ -61,38 +121,38 @@ const App: React.FC = () => {
   };
 
   const handleFinishConsultation = (evolutionData?: { diagnosis: string; conduct: string; complaint: string }) => {
-    if (activeAppointmentId) {
-      const appointment = db.appointments.find(a => a.id === activeAppointmentId);
-      
-      if (appointment) {
+    // Se houver dados de evolução, salvamos no prontuário do paciente
+    if (activeAppointmentId && evolutionData) {
+      setDb(prev => {
+        const appointment = prev.appointments.find(a => a.id === activeAppointmentId);
+        if (!appointment) return prev;
+
         const dateStr = new Date().toLocaleDateString('pt-BR');
         const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         
-        // Formatação padronizada para o parser de histórico
-        const newEntry = `\n\n[DATA: ${dateStr} às ${timeStr}]\nQUEIXA: ${evolutionData?.complaint || 'N/A'}\nDIAGNÓSTICO: ${evolutionData?.diagnosis || 'N/A'}\nCONDUTA: ${evolutionData?.conduct || 'N/A'}\n`;
+        const newEntry = `[DATA: ${dateStr} às ${timeStr}]\nQUEIXA: ${evolutionData.complaint}\nDIAGNÓSTICO: ${evolutionData.diagnosis}\nCONDUTA: ${evolutionData.conduct}\n\n`;
         
-        // Atualização atômica do estado para garantir persistência
-        setDb(prev => {
-          const updatedPatients = prev.patients.map(p => 
-            p.id === appointment.patientId 
-              ? { ...p, history: (p.history || '') + newEntry } 
-              : p
-          );
-          
-          const updatedAppointments = prev.appointments.map(a => 
-            a.id === activeAppointmentId 
-              ? { ...a, status: AppointmentStatus.FINISHED } 
-              : a
-          );
+        const updatedPatients = (prev.patients || []).map(p => 
+          p.id === appointment.patientId 
+            ? { ...p, history: newEntry + (p.history || '') } 
+            : p
+        );
+        
+        const updatedAppointments = (prev.appointments || []).map(a => 
+          a.id === activeAppointmentId 
+            ? { ...a, status: AppointmentStatus.FINISHED } 
+            : a
+        );
 
-          return {
-            ...prev,
-            patients: updatedPatients,
-            appointments: updatedAppointments
-          };
-        });
-      }
+        return {
+          ...prev,
+          patients: updatedPatients,
+          appointments: updatedAppointments
+        };
+      });
     }
+    
+    // Independente de ter dados ou não (ex: botão voltar), fechamos a sala de consulta
     setActiveAppointmentId(null);
     setCurrentView('agenda');
   };
@@ -180,41 +240,91 @@ const App: React.FC = () => {
               />
             </div>
           </div>
+          
+          <div className="flex items-center space-x-6">
+            <div className={`flex items-center space-x-2 px-4 py-2 rounded-full border shadow-inner transition-all ${cloudStatus === 'connected' ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+              {isSyncing ? (
+                <RefreshCw size={14} className="text-blue-500 animate-spin" />
+              ) : cloudStatus === 'connected' ? (
+                <Cloud size={14} className="text-emerald-500" />
+              ) : (
+                <CloudOff size={14} className="text-slate-400" />
+              )}
+              <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${cloudStatus === 'connected' ? 'text-emerald-700' : 'text-slate-400'}`}>
+                {isSyncing ? 'Salvando Nuvem...' : cloudStatus === 'connected' ? 'Supabase Online' : 'Cloud Offline'}
+              </span>
+              {cloudStatus === 'connected' && !isSyncing && <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>}
+            </div>
+            <button className="relative p-2 text-slate-400 hover:text-blue-600 transition-colors">
+              <Bell size={20} />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            </button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50">
           {currentView === 'dashboard' && <Dashboard patientsCount={filteredPatients.length} appointments={filteredAppointments} />}
-          {currentView === 'agenda' && <Agenda appointments={filteredAppointments} startConsultation={startConsultation} />}
+          {currentView === 'agenda' && (
+            <Agenda 
+              appointments={filteredAppointments} 
+              setAppointments={(newA) => setDb(prev => {
+                const apptsList = prev.appointments || [];
+                const nextAppts = typeof newA === 'function' ? newA(apptsList) : newA;
+                return { ...prev, appointments: nextAppts };
+              })}
+              patients={filteredPatients}
+              doctors={db.doctors || []}
+              currentUser={currentUser}
+              startConsultation={startConsultation} 
+            />
+          )}
           {currentView === 'patients' && (
             <PatientManager 
               patients={filteredPatients} 
-              setPatients={(newP) => setDb(p => ({...p, patients: typeof newP === 'function' ? newP(p.patients) : newP}))}
-              doctors={db.doctors}
+              setPatients={(newP) => setDb(prev => {
+                const patientsList = prev.patients || [];
+                const nextPatients = typeof newP === 'function' ? newP(patientsList) : newP;
+                return { ...prev, patients: nextPatients };
+              })}
+              doctors={db.doctors || []}
               isAdmin={currentUser.role === UserRole.ADMIN}
             />
           )}
           {currentView === 'doctors' && (
             <DoctorRegistry 
-              doctors={db.doctors} 
-              setDoctors={(newD) => setDb(p => ({...p, doctors: typeof newD === 'function' ? newD(p.doctors) : newD}))}
-              setUsers={(newU) => setDb(p => ({...p, users: typeof newU === 'function' ? newU(p.users) : newU}))}
+              doctors={db.doctors || []} 
+              users={db.users || []}
+              setDoctors={(newD) => setDb(prev => {
+                const doctorsList = prev.doctors || [];
+                const nextDoctors = typeof newD === 'function' ? newD(doctorsList) : newD;
+                return { ...prev, doctors: nextDoctors };
+              })}
+              setUsers={(newU) => setDb(prev => {
+                const usersList = prev.users || [];
+                const nextUsers = typeof newU === 'function' ? newU(usersList) : newU;
+                return { ...prev, users: nextUsers };
+              })}
             />
           )}
           {currentView === 'backups' && (
             <ExportCenter 
               onExport={storage.exportBackup} 
               onImport={async (file) => {
-                await storage.importBackup(file);
-                window.location.reload();
+                try {
+                  await storage.importBackup(file);
+                  window.location.reload();
+                } catch (e: any) {
+                  alert(e.message);
+                }
               }}
             />
           )}
           {currentView === 'consultation' && activeAppointmentId && (
             <ConsultationRoom 
               appointmentId={activeAppointmentId} 
-              appointments={db.appointments}
-              patients={db.patients}
-              doctors={db.doctors}
+              appointments={db.appointments || []}
+              patients={db.patients || []}
+              doctors={db.doctors || []}
               onFinish={handleFinishConsultation}
             />
           )}
