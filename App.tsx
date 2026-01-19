@@ -22,7 +22,9 @@ import {
   Database,
   Cloud,
   CloudOff,
-  RefreshCw
+  RefreshCw,
+  BarChart3,
+  PieChart
 } from 'lucide-react';
 import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus } from './types';
 import { storage, AppDatabase } from './services/storage';
@@ -34,8 +36,9 @@ import DoctorRegistry from './components/DoctorRegistry';
 import ExportCenter from './components/ExportCenter';
 import Login from './components/Login';
 import LandingPage from './components/LandingPage';
+import AppointmentReport from './components/AppointmentReport';
 
-type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups';
+type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups' | 'reports';
 
 const App: React.FC = () => {
   const [db, setDb] = useState<AppDatabase>(storage.initLocal());
@@ -105,12 +108,10 @@ const App: React.FC = () => {
     );
   }
 
-  // Primeiro mostra a tela de capa
   if (showLanding && !currentUser) {
     return <LandingPage onEnter={() => setShowLanding(false)} />;
   }
 
-  // Depois o login
   if (!currentUser) {
     return <Login users={db.users || []} onLogin={setCurrentUser} />;
   }
@@ -137,7 +138,12 @@ const App: React.FC = () => {
         const dateStr = new Date().toLocaleDateString('pt-BR');
         const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         
-        const newEntry = `[DATA: ${dateStr} às ${timeStr}]\nQUEIXA: ${evolutionData.complaint}\nDIAGNÓSTICO: ${evolutionData.diagnosis}\nCONDUTA: ${evolutionData.conduct}\n\n`;
+        const newEntry = `[DATA: ${dateStr} às ${timeStr}]\n` +
+                         `MÉDICO: ${currentUser.name}\n` +
+                         `QUEIXA/EVOLUÇÃO: ${evolutionData.complaint}\n` +
+                         (evolutionData.diagnosis ? `DIAGNÓSTICO (CID): ${evolutionData.diagnosis}\n` : '') +
+                         (evolutionData.conduct ? `CONDUTA: ${evolutionData.conduct}\n` : '') +
+                         `--------------------------------------------------\n\n`;
         
         const updatedPatients = (prev.patients || []).map(p => 
           p.id === appointment.patientId 
@@ -157,6 +163,7 @@ const App: React.FC = () => {
           appointments: updatedAppointments
         };
       });
+      alert("Atendimento finalizado com sucesso. Os dados foram gravados na ficha do paciente.");
     }
     
     setActiveAppointmentId(null);
@@ -208,6 +215,7 @@ const App: React.FC = () => {
           <SidebarItem view="dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" />
           <SidebarItem view="agenda" icon={<Calendar size={18} />} label="Minha Agenda" />
           <SidebarItem view="patients" icon={<Users size={18} />} label="Meus Pacientes" />
+          <SidebarItem view="reports" icon={<BarChart3 size={18} />} label="Relatórios" adminOnly />
           <SidebarItem view="doctors" icon={<Heart size={18} />} label="Corpo Clínico" adminOnly />
           <SidebarItem view="backups" icon={<Download size={18} />} label="Exportar Dados" adminOnly />
         </nav>
@@ -297,6 +305,13 @@ const App: React.FC = () => {
               })}
               doctors={db.doctors || []}
               isAdmin={currentUser.role === UserRole.ADMIN}
+            />
+          )}
+          {currentView === 'reports' && (
+            <AppointmentReport 
+              appointments={db.appointments || []} 
+              patients={db.patients || []} 
+              doctors={db.doctors || []} 
             />
           )}
           {currentView === 'doctors' && (

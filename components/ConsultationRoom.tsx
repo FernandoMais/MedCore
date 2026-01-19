@@ -20,7 +20,8 @@ import {
   User as UserIcon,
   Activity,
   History,
-  AlertCircle
+  AlertCircle,
+  ArrowRight
 } from 'lucide-react';
 import { Appointment, Patient, Prescription, Doctor, MedicalFile } from '../types';
 import { getICDRecommendation } from '../services/gemini';
@@ -110,11 +111,9 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
       return;
     }
 
-    if (confirm("Confirmar encerramento da consulta? Os dados serão gravados permanentemente no prontuário do paciente.")) {
+    if (confirm("Confirmar encerramento da consulta?\n\nTudo o que você escreveu na 'Evolução do Atendimento' será movido para o 'Histórico' permanente do paciente com a data de hoje.")) {
       setIsFinishing(true);
-      // Remove o rascunho antes de encerrar
       localStorage.removeItem(`medcore_consult_draft_${appointmentId}`);
-      // Dispara o callback para o App.tsx que fará o fechamento da tela e o setDb
       onFinish({ diagnosis, conduct, complaint });
     }
   };
@@ -183,7 +182,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             type="button"
             onClick={handleFinalize} 
             disabled={isFinishing}
-            className={`px-10 py-4 rounded-[20px] font-black text-xs shadow-2xl flex items-center space-x-3 transition-all active:scale-95 ${isFinishing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'}`}
+            className={`px-10 py-4 rounded-[20px] font-black text-xs shadow-2xl flex items-center space-x-3 transition-all active:scale-95 ${isFinishing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200'}`}
           >
             {isFinishing ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle size={18} />}
             <span className="uppercase tracking-[0.1em]">{isFinishing ? 'Gravando...' : 'Finalizar e Gravar no Prontuário'}</span>
@@ -199,12 +198,8 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
              <div className="flex items-center justify-between mb-6 shrink-0">
                 <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em] flex items-center">
                   <History size={18} className="mr-3 text-blue-600" />
-                  Ficha do Paciente (Histórico)
+                  Histórico (Consultas Finalizadas)
                 </h3>
-                <div className="flex space-x-1">
-                   <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                   <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                </div>
              </div>
              
              {/* Info rápida */}
@@ -217,6 +212,11 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sanguíneo</p>
                    <p className="text-[10px] font-bold text-blue-600">{patient.bloodType || 'N/I'}</p>
                 </div>
+             </div>
+
+             <div className="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-100 flex items-center space-x-2 shrink-0">
+                <ArrowRight size={14} className="text-blue-600" />
+                <p className="text-[9px] font-bold text-blue-700 uppercase">A nota de hoje será adicionada acima dos registros abaixo.</p>
              </div>
 
              {/* Histórico Rolável */}
@@ -253,8 +253,8 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
           <div className="bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm space-y-8 h-full flex flex-col">
             <div className="flex items-center justify-between shrink-0">
               <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center">
-                <FileEdit size={24} className="mr-4 text-blue-600" />
-                Evolução do Atendimento
+                <FileEdit size={24} className="mr-4 text-emerald-600" />
+                Evolução do Atendimento (Hoje)
               </h3>
               <button 
                 type="button"
@@ -270,13 +270,13 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             <div className="flex-1 flex flex-col space-y-8">
               <div className="space-y-3 flex-1 flex flex-col">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2 flex items-center">
-                   <Activity size={14} className="mr-2" /> Queixa Principal / Evolução Clínica (Obrigatório)
+                   <Activity size={14} className="mr-2 text-emerald-600" /> Queixa Principal / Evolução Clínica (Obrigatório)
                 </label>
                 <textarea 
                   value={complaint} 
                   onChange={(e) => setComplaint(e.target.value)} 
-                  className="w-full flex-1 p-8 bg-slate-50 border border-slate-100 rounded-[36px] outline-none text-base font-medium leading-relaxed focus:ring-4 focus:ring-blue-500/10 focus:border-blue-200 transition-all shadow-inner" 
-                  placeholder="Descreva aqui o atendimento atual, anamnese, exame físico e evolução do paciente..."
+                  className="w-full flex-1 p-8 bg-slate-50 border border-slate-100 rounded-[36px] outline-none text-base font-medium leading-relaxed focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-200 transition-all shadow-inner" 
+                  placeholder="Escreva aqui o que o paciente está relatando neste exato momento..."
                 />
               </div>
 
@@ -302,7 +302,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                     onChange={(e) => setConduct(e.target.value)} 
                     rows={2} 
                     className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-600 outline-none focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" 
-                    placeholder="Medicação sugerida, exames solicitados e retorno..." 
+                    placeholder="Medicação sugerida hoje, exames pedidos..." 
                   />
                 </div>
               </div>
@@ -312,9 +312,9 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             <div className="pt-4 flex items-center justify-between border-t border-slate-50 shrink-0">
                <div className="flex items-center space-x-2 text-[9px] font-black text-slate-300 uppercase tracking-widest">
                   <Save size={12} />
-                  <span>Rascunho automático ativo para o agendamento {appointment.id}</span>
+                  <span>Rascunho temporário ativo</span>
                </div>
-               <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest italic">Dr(a). {doctor?.name}</p>
+               <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest italic">Responsável: {doctor?.name}</p>
             </div>
           </div>
         </div>
