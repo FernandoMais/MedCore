@@ -33,6 +33,7 @@ import ConsultationRoom from './components/ConsultationRoom';
 import DoctorRegistry from './components/DoctorRegistry';
 import ExportCenter from './components/ExportCenter';
 import Login from './components/Login';
+import LandingPage from './components/LandingPage';
 
 type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups';
 
@@ -44,6 +45,7 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline'>('offline');
   const [isLoading, setIsLoading] = useState(true);
+  const [showLanding, setShowLanding] = useState(true);
 
   // Boot: Sincronização Inicial com Supabase
   useEffect(() => {
@@ -103,6 +105,12 @@ const App: React.FC = () => {
     );
   }
 
+  // Primeiro mostra a tela de capa
+  if (showLanding && !currentUser) {
+    return <LandingPage onEnter={() => setShowLanding(false)} />;
+  }
+
+  // Depois o login
   if (!currentUser) {
     return <Login users={db.users || []} onLogin={setCurrentUser} />;
   }
@@ -121,7 +129,6 @@ const App: React.FC = () => {
   };
 
   const handleFinishConsultation = (evolutionData?: { diagnosis: string; conduct: string; complaint: string }) => {
-    // Se houver dados de evolução, salvamos no prontuário do paciente
     if (activeAppointmentId && evolutionData) {
       setDb(prev => {
         const appointment = prev.appointments.find(a => a.id === activeAppointmentId);
@@ -152,7 +159,6 @@ const App: React.FC = () => {
       });
     }
     
-    // Independente de ter dados ou não (ex: botão voltar), fechamos a sala de consulta
     setActiveAppointmentId(null);
     setCurrentView('agenda');
   };
@@ -219,7 +225,10 @@ const App: React.FC = () => {
             </div>
           </div>
           <button 
-            onClick={() => setCurrentUser(null)}
+            onClick={() => {
+              setCurrentUser(null);
+              setShowLanding(true);
+            }}
             className="w-full flex items-center space-x-3 px-4 py-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
           >
             <LogOut size={18} />
