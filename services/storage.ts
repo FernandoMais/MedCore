@@ -33,7 +33,6 @@ export const storage = {
       const saved = localStorage.getItem(DB_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Garante que todas as propriedades obrigatórias existam como arrays
         return {
           users: Array.isArray(parsed.users) ? parsed.users : DEFAULT_DB.users,
           patients: Array.isArray(parsed.patients) ? parsed.patients : DEFAULT_DB.patients,
@@ -49,30 +48,28 @@ export const storage = {
     return DEFAULT_DB;
   },
 
-  // Busca assíncrona garantindo o retorno de arrays vazios em vez de null/undefined
+  // Busca assíncrona com tratamento de erro silencioso para evitar travamentos (401)
   fetchFromCloud: async (): Promise<Partial<AppDatabase>> => {
     try {
-      const [
-        { data: patients },
-        { data: doctors },
-        { data: appointments },
-        { data: users }
-      ] = await Promise.all([
-        supabase.from('patients').select('*'),
-        supabase.from('doctors').select('*'),
-        supabase.from('appointments').select('*'),
-        supabase.from('users').select('*')
-      ]);
-
+      // Fazemos o fetch um por um para isolar erros de permissão de tabelas específicas
       const cloudData: Partial<AppDatabase> = {};
-      if (patients) cloudData.patients = patients;
-      if (doctors) cloudData.doctors = doctors;
-      if (appointments) cloudData.appointments = appointments;
-      if (users) cloudData.users = users;
+      
+      const patientsRes = await supabase.from('patients').select('*');
+      if (!patientsRes.error) cloudData.patients = patientsRes.data;
+
+      const doctorsRes = await supabase.from('doctors').select('*');
+      if (!doctorsRes.error) cloudData.doctors = doctorsRes.data;
+
+      const appointmentsRes = await supabase.from('appointments').select('*');
+      if (!appointmentsRes.error) cloudData.appointments = appointmentsRes.data;
+
+      const usersRes = await supabase.from('users').select('*');
+      if (!usersRes.error) cloudData.users = usersRes.data;
 
       return cloudData;
     } catch (e) {
-      console.error("Erro ao sincronizar com nuvem:", e);
+      // Em caso de 401 ou qualquer erro de rede, retornamos vazio para usar o local
+      console.warn("Supabase Sync: Acesso negado ou erro de rede. Usando dados locais.");
       return {};
     }
   },
@@ -85,28 +82,16 @@ export const storage = {
     }
   },
 
-  // Sincronização persistente com verificações de segurança contra propriedades indefinidas
   syncToCloud: async (db: AppDatabase) => {
     try {
-      const syncTasks = [];
-      
-      if (db.patients && db.patients.length > 0) 
-        syncTasks.push(supabase.from('patients').upsert(db.patients));
-      
-      if (db.doctors && db.doctors.length > 0) 
-        syncTasks.push(supabase.from('doctors').upsert(db.doctors));
-      
-      if (db.appointments && db.appointments.length > 0) 
-        syncTasks.push(supabase.from('appointments').upsert(db.appointments));
-      
-      if (db.users && db.users.length > 0) 
-        syncTasks.push(supabase.from('users').upsert(db.users));
-
-      if (syncTasks.length > 0) {
-        await Promise.all(syncTasks);
-      }
+      // Tenta persistir na nuvem
+      if (db.patients?.length > 0) await supabase.from('patients').upsert(db.patients);
+      if (db.doctors?.length > 0) await supabase.from('doctors').upsert(db.doctors);
+      if (db.appointments?.length > 0) await supabase.from('appointments').upsert(db.appointments);
+      if (db.users?.length > 0) await supabase.from('users').upsert(db.users);
     } catch (e) {
       console.error("Erro na sincronização cloud:", e);
+      throw e; // Lança para que o App saiba que está offline
     }
   },
 

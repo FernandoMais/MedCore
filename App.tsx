@@ -47,24 +47,22 @@ const App: React.FC = () => {
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline'>('offline');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Inicia como falso para renderizar Landing Page imediatamente
   const [showLanding, setShowLanding] = useState(true);
 
-  // Boot: Sincronização Inicial com Supabase
+  // Boot: Sincronização em segundo plano (Não bloqueante)
   useEffect(() => {
     const syncInit = async () => {
-      setIsLoading(true);
+      // Tenta sincronizar silenciosamente
       const cloudData = await storage.fetchFromCloud();
       
-      setDb(prev => ({
-        ...prev,
-        ...cloudData
-      }));
-      
       if (cloudData && Object.keys(cloudData).length > 0) {
+        setDb(prev => ({
+          ...prev,
+          ...cloudData
+        }));
         setCloudStatus('connected');
       }
-      setIsLoading(false);
     };
     
     syncInit();
@@ -72,46 +70,46 @@ const App: React.FC = () => {
 
   // Persistência Atômica (Local + Cloud)
   useEffect(() => {
-    if (isLoading) return;
-    
+    // Salva localmente sempre
     storage.save(db);
     
+    // Sincroniza com a nuvem apenas se houver mudanças e após debounce
     const cloudSync = async () => {
-      setIsSyncing(true);
-      try {
-        await storage.syncToCloud(db);
-        setCloudStatus('connected');
-      } catch (err) {
-        console.error("Cloud sync failed", err);
-        setCloudStatus('offline');
-      } finally {
-        setTimeout(() => setIsSyncing(false), 1000);
+      if (currentUser) { // Só tenta sincronização pesada se houver usuário logado
+        setIsSyncing(true);
+        try {
+          await storage.syncToCloud(db);
+          setCloudStatus('connected');
+        } catch (err) {
+          setCloudStatus('offline');
+        } finally {
+          setTimeout(() => setIsSyncing(false), 1000);
+        }
       }
     };
 
-    const timer = setTimeout(cloudSync, 2000);
+    const timer = setTimeout(cloudSync, 3000);
     return () => clearTimeout(timer);
-  }, [db, isLoading]);
+  }, [db, currentUser]);
 
+  // Se estiver carregando algo crítico (como um import de backup)
   if (isLoading) {
     return (
       <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center">
         <div className="w-16 h-16 bg-blue-600 rounded-[24px] flex items-center justify-center text-white animate-bounce shadow-2xl shadow-blue-200 mb-6">
           <ShieldCheck size={32} />
         </div>
-        <h2 className="text-xl font-black text-slate-800 tracking-tighter">Sincronizando MedCore Cloud</h2>
-        <div className="flex items-center space-x-2 mt-4">
-          <RefreshCw size={14} className="animate-spin text-blue-500" />
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aguardando Supabase...</span>
-        </div>
+        <h2 className="text-xl font-black text-slate-800 tracking-tighter">Processando dados...</h2>
       </div>
     );
   }
 
+  // Prioridade 1: Tela de Capa (Não deve ser bloqueada por rede)
   if (showLanding && !currentUser) {
     return <LandingPage onEnter={() => setShowLanding(false)} />;
   }
 
+  // Prioridade 2: Login
   if (!currentUser) {
     return <Login users={db.users || []} onLogin={setCurrentUser} />;
   }
@@ -163,7 +161,7 @@ const App: React.FC = () => {
           appointments: updatedAppointments
         };
       });
-      alert("Atendimento finalizado com sucesso. Os dados foram gravados na ficha do paciente.");
+      alert("Atendimento finalizado com sucesso.");
     }
     
     setActiveAppointmentId(null);
@@ -268,9 +266,8 @@ const App: React.FC = () => {
                 <CloudOff size={14} className="text-slate-400" />
               )}
               <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${cloudStatus === 'connected' ? 'text-emerald-700' : 'text-slate-400'}`}>
-                {isSyncing ? 'Salvando Nuvem...' : cloudStatus === 'connected' ? 'Supabase Online' : 'Cloud Offline'}
+                {isSyncing ? 'Salvando...' : cloudStatus === 'connected' ? 'Cloud Online' : 'Cloud Offline'}
               </span>
-              {cloudStatus === 'connected' && !isSyncing && <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>}
             </div>
             <button className="relative p-2 text-slate-400 hover:text-blue-600 transition-colors">
               <Bell size={20} />
@@ -335,10 +332,12 @@ const App: React.FC = () => {
               onExport={storage.exportBackup} 
               onImport={async (file) => {
                 try {
+                  setIsLoading(true);
                   await storage.importBackup(file);
                   window.location.reload();
                 } catch (e: any) {
                   alert(e.message);
+                  setIsLoading(false);
                 }
               }}
             />
