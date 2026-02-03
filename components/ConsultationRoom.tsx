@@ -68,21 +68,23 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   const filteredMeds = medications.filter(m => 
     m.name.toLowerCase().includes(medSearch.toLowerCase()) ||
     m.purpose?.toLowerCase().includes(medSearch.toLowerCase())
-  ).slice(0, 5); // Mostra apenas os primeiros 5 resultados para manter limpo
+  ).slice(0, 5);
 
-  // Recuperar rascunho automático ao montar
   useEffect(() => {
     const draft = localStorage.getItem(`medcore_consult_draft_${appointmentId}`);
     if (draft) {
-      const data = JSON.parse(draft);
-      setComplaint(data.complaint || '');
-      setConduct(data.conduct || '');
-      setDiagnosis(data.diagnosis || '');
-      setPrescription(data.prescription || '');
+      try {
+        const data = JSON.parse(draft);
+        setComplaint(data.complaint || '');
+        setConduct(data.conduct || '');
+        setDiagnosis(data.diagnosis || '');
+        setPrescription(data.prescription || '');
+      } catch (e) {
+        console.error("Erro ao carregar rascunho:", e);
+      }
     }
   }, [appointmentId]);
 
-  // Fechar resultados ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
@@ -93,7 +95,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Salvar rascunho automático
   useEffect(() => {
     const draft = { complaint, conduct, diagnosis, prescription, appointmentId };
     localStorage.setItem(`medcore_consult_draft_${appointmentId}`, JSON.stringify(draft));
@@ -122,11 +123,20 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
       alert("Escreva o receituário antes de imprimir.");
       return;
     }
-    window.print();
+    // Pequeno delay para garantir que o render do print-only foi processado
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
+  const openOfficialPrescription = () => {
+    window.open('https://prescricao.cfm.org.br/login', '_blank');
   };
 
   const handleFinalize = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+
     if (!complaint.trim()) {
       alert("A 'Queixa Principal / Evolução' é obrigatória.");
       return;
@@ -134,8 +144,17 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
 
     if (confirm("Confirmar encerramento da consulta?\n\nOs dados da Evolução e do Receituário serão arquivados no histórico do paciente.")) {
       setIsFinishing(true);
+      
+      // Remove o rascunho do localStorage antes de finalizar
       localStorage.removeItem(`medcore_consult_draft_${appointmentId}`);
-      onFinish({ diagnosis, conduct, complaint, prescription });
+      
+      // Chama a função onFinish vinda do App.tsx com os dados coletados
+      onFinish({ 
+        diagnosis, 
+        conduct, 
+        complaint, 
+        prescription 
+      });
     }
   };
 
@@ -175,40 +194,40 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   return (
     <div className="max-w-[100%] mx-auto space-y-6 pb-20 animate-in fade-in duration-500 h-full flex flex-col">
       
-      {/* DOCUMENTO PARA IMPRESSÃO */}
-      <div className="print-only prescription-print bg-white">
+      {/* DOCUMENTO PARA IMPRESSÃO INTERNA (Visto apenas na hora de imprimir) */}
+      <div className="print-only prescription-print">
         <div className="prescription-header">
-          <h1 className="text-2xl font-black text-blue-600 uppercase tracking-tighter">MedCore Pro Clinic</h1>
-          <p className="text-sm font-bold text-slate-800">DR. {doctor?.name.toUpperCase()}</p>
-          <p className="text-xs font-black text-blue-500 uppercase tracking-widest">CRM: {doctor?.crm}</p>
-          <p className="text-[10px] text-slate-500 mt-2">{doctor?.specialty} • Fone: {doctor?.phone}</p>
+          <h1 className="text-3xl font-black text-blue-600 uppercase tracking-tighter">MedCore Pro Clinic</h1>
+          <p className="text-lg font-bold text-slate-800">DR. {doctor?.name.toUpperCase()}</p>
+          <p className="text-sm font-black text-blue-500 uppercase tracking-widest">CRM: {doctor?.crm}</p>
+          <p className="text-xs text-slate-500 mt-2">{doctor?.specialty} • Fone: {doctor?.phone}</p>
         </div>
 
-        <div className="mb-10 p-4 border border-slate-200 rounded-xl bg-slate-50/30">
-          <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Paciente</p>
-          <p className="text-lg font-black text-slate-900">{patient.name}</p>
-          <div className="flex space-x-6 text-xs font-bold text-slate-600 mt-1">
+        <div className="mb-10 p-6 border border-slate-200 rounded-2xl bg-slate-50/50">
+          <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Paciente</p>
+          <p className="text-2xl font-black text-slate-900">{patient.name}</p>
+          <div className="flex space-x-8 text-sm font-bold text-slate-600 mt-2">
             <span>CPF: {patient.cpf}</span>
-            <span>Nascimento: {new Date(patient.birthDate).toLocaleDateString('pt-BR')}</span>
+            <span>Nasc: {new Date(patient.birthDate).toLocaleDateString('pt-BR')}</span>
           </div>
         </div>
 
         <div className="prescription-body">
-          <h2 className="text-sm font-black uppercase tracking-[0.3em] text-blue-600 border-b border-blue-100 pb-2 mb-6">Receituário Médico</h2>
-          <div className="whitespace-pre-wrap font-medium text-slate-800">
+          <h2 className="text-sm font-black uppercase tracking-[0.4em] text-blue-600 border-b-2 border-blue-100 pb-3 mb-8">Receituário Médico</h2>
+          <div className="whitespace-pre-wrap">
             {prescription || "Nenhum medicamento prescrito nesta consulta."}
           </div>
         </div>
 
         <div className="prescription-footer">
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-4">Gerado em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</p>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-6">Emissão do sistema em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</p>
           <div className="signature-line"></div>
-          <p className="text-xs font-black text-slate-900">Dr. {doctor?.name}</p>
-          <p className="text-[10px] text-slate-500">CRM {doctor?.crm}</p>
+          <p className="text-sm font-black text-slate-900">Dr. {doctor?.name}</p>
+          <p className="text-xs text-slate-500 font-bold">CRM {doctor?.crm} - {doctor?.specialty}</p>
         </div>
       </div>
 
-      {/* Barra de Ações Superior */}
+      {/* Barra de Ações Superior (Apenas Tela) */}
       <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between sticky top-0 z-20 no-print">
         <div className="flex items-center space-x-6">
           <button 
@@ -235,20 +254,30 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
         <div className="flex items-center space-x-3">
            <button 
             type="button"
-            onClick={handlePrintPrescription}
-            className="px-6 py-4 bg-white border border-slate-200 text-slate-700 rounded-[20px] font-black text-xs uppercase tracking-widest flex items-center space-x-2 hover:bg-slate-50 transition-all"
+            onClick={openOfficialPrescription}
+            className="px-6 py-4 bg-emerald-600 text-white rounded-[20px] font-black text-xs uppercase tracking-widest flex items-center space-x-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
            >
-              <Printer size={18} />
-              <span>Imprimir Receita</span>
+              <ShieldCheck size={18} />
+              <span>Receitas Online</span>
            </button>
+           
+           <button 
+            type="button"
+            onClick={handlePrintPrescription}
+            className="p-4 bg-white border border-slate-200 text-slate-700 rounded-[20px] hover:bg-slate-50 hover:border-blue-300 transition-all active:scale-95 shadow-sm"
+            title="Imprimir Receituário Interno"
+           >
+              <Printer size={22} className="text-blue-600" />
+           </button>
+
            <button 
             type="button"
             onClick={handleFinalize} 
             disabled={isFinishing}
-            className={`px-10 py-4 rounded-[20px] font-black text-xs shadow-2xl flex items-center space-x-3 transition-all active:scale-95 ${isFinishing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200'}`}
+            className={`px-10 py-4 rounded-[20px] font-black text-xs shadow-2xl flex items-center space-x-3 transition-all active:scale-95 ${isFinishing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'}`}
           >
             {isFinishing ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle size={18} />}
-            <span className="uppercase tracking-[0.1em]">{isFinishing ? 'Gravando...' : 'Finalizar Atendimento'}</span>
+            <span className="uppercase tracking-[0.1em]">{isFinishing ? 'Salvando...' : 'Finalizar Atendimento'}</span>
           </button>
         </div>
       </div>
@@ -282,7 +311,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
               <button 
                 type="button"
                 onClick={handleAiAssist} 
-                className="text-blue-600 bg-blue-50 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center space-x-2"
+                className="text-blue-600 bg-blue-50 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center space-x-2 transition-colors hover:bg-blue-100"
               >
                 <Sparkles size={14} className={isAiLoading ? "animate-spin" : ""} />
                 <span>IA CID</span>
@@ -291,12 +320,12 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
 
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Queixa / Evolução Clínica</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Queixa / Evolução Clínica *</label>
                 <textarea 
                   value={complaint} 
                   onChange={(e) => setComplaint(e.target.value)} 
                   className="w-full h-48 p-6 bg-slate-50 border border-slate-100 rounded-[28px] outline-none text-sm font-medium leading-relaxed focus:ring-4 focus:ring-blue-500/10 transition-all" 
-                  placeholder="Relato atual do paciente..."
+                  placeholder="Relate atual do paciente..."
                 />
               </div>
 
@@ -306,7 +335,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                   type="text" 
                   value={diagnosis} 
                   onChange={(e) => setDiagnosis(e.target.value)} 
-                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black text-slate-700 text-sm outline-none" 
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black text-slate-700 text-sm outline-none focus:ring-4 focus:ring-blue-500/10 transition-all" 
                   placeholder="Ex: I10 - Hipertensão" 
                 />
               </div>
@@ -357,15 +386,16 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                   <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 border border-slate-100">
                     <div className="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Resultados Encontrados</span>
-                       <X size={14} className="text-slate-300 cursor-pointer" onClick={() => setShowMedResults(false)} />
+                       <X size={14} className="text-slate-300 cursor-pointer hover:text-red-500" onClick={() => setShowMedResults(false)} />
                     </div>
                     <div className="max-h-64 overflow-y-auto">
                       {filteredMeds.length > 0 ? (
                         filteredMeds.map((med) => (
                           <button 
                             key={med.id}
+                            type="button"
                             onClick={() => addMedication(med)}
-                            className="w-full text-left p-4 hover:bg-blue-50 flex items-center justify-between group border-b border-slate-50 last:border-none"
+                            className="w-full text-left p-4 hover:bg-blue-50 flex items-center justify-between group border-b border-slate-50 last:border-none transition-colors"
                           >
                             <div>
                                <p className="font-black text-slate-800 text-sm">{med.name} <span className="text-blue-600 text-xs">{med.dosage}</span></p>
@@ -399,11 +429,12 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
              <div className="mt-6 flex items-center justify-between pt-6 border-t border-white/10 shrink-0">
                 <div className="flex items-center space-x-2 text-[9px] font-black text-slate-500 uppercase">
                    <ShieldCheck size={14} className="text-blue-500" />
-                   <span>Assinatura Digital CRM Pronta</span>
+                   <span>CRM {doctor?.crm} - MedCore PRO</span>
                 </div>
                 <button 
+                  type="button"
                   onClick={handlePrintPrescription}
-                  className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
+                  className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-90"
                 >
                   <Printer size={18} />
                 </button>

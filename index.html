@@ -13,7 +13,7 @@
         /* Estilos de Impressão Profissionais */
         @media print {
             @page {
-                margin: 15mm;
+                margin: 10mm;
                 size: a4;
             }
             body { 
@@ -32,41 +32,46 @@
                 width: 100% !important; 
                 display: block !important;
                 overflow: visible !important;
+                background: white !important;
             }
 
             /* Estilo específico para Receita Médica */
             .prescription-print {
                 display: block !important;
-                padding: 40pt;
-                border: 1pt solid #eee;
-                min-height: 100%;
+                padding: 20mm;
+                border: none;
+                min-height: 297mm;
+                width: 210mm;
+                margin: 0 auto;
+                background: white !important;
             }
 
             .prescription-header {
                 text-align: center;
                 border-bottom: 2pt solid #2563eb;
-                margin-bottom: 30pt;
-                padding-bottom: 10pt;
+                margin-bottom: 20pt;
+                padding-bottom: 15pt;
             }
 
             .prescription-body {
-                font-size: 12pt;
-                line-height: 1.6;
-                margin-bottom: 50pt;
-                min-height: 400pt;
+                font-size: 13pt;
+                line-height: 1.8;
+                margin-bottom: 40pt;
+                min-height: 150mm;
+                color: #1e293b !important;
             }
 
             .prescription-footer {
                 text-align: center;
-                margin-top: 50pt;
-                border-top: 1pt solid #ccc;
-                padding-top: 10pt;
+                margin-top: 30pt;
+                border-top: 1pt solid #cbd5e1;
+                padding-top: 15pt;
             }
 
             .signature-line {
-                width: 250pt;
-                border-top: 1pt solid black;
-                margin: 40pt auto 5pt auto;
+                width: 80mm;
+                border-top: 1.5pt solid black !important;
+                margin: 30pt auto 8pt auto;
             }
 
             /* Estilização da Evolução no PDF */

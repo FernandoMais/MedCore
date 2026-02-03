@@ -115,7 +115,7 @@ const App: React.FC = () => {
   };
 
   const handleFinishConsultation = (evolutionData?: { diagnosis: string; conduct: string; complaint: string; prescription: string }) => {
-    if (activeAppointmentId && evolutionData) {
+    if (activeAppointmentId && evolutionData && currentUser) {
       setDb(prev => {
         const appointment = prev.appointments.find(a => a.id === activeAppointmentId);
         if (!appointment) return prev;
@@ -149,7 +149,7 @@ const App: React.FC = () => {
           appointments: updatedAppointments
         };
       });
-      alert("Atendimento e Receituário salvos no histórico.");
+      alert("Atendimento e Receituário salvos no histórico com sucesso.");
     }
     
     setActiveAppointmentId(null);

@@ -198,7 +198,7 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
           <p className="text-slate-500 font-medium tracking-tight">Gestão de histórico clínico cronológico e exames.</p>
         </div>
         <div className="flex items-center space-x-3">
-          <button onClick={() => window.open('https://prescricao.cfm.org.br/login', '_blank')} className="bg-emerald-600 text-white px-6 py-3.5 rounded-2xl font-black text-xs shadow-xl hover:bg-emerald-700 flex items-center space-x-2 transition-all active:scale-95"><ShieldCheck size={18} /><span>PRESCRIÇÃO CFM</span></button>
+          <button onClick={() => window.open('https://prescricao.cfm.org.br/login', '_blank')} className="bg-emerald-600 text-white px-6 py-3.5 rounded-2xl font-black text-xs shadow-xl hover:bg-emerald-700 flex items-center space-x-2 transition-all active:scale-95"><ShieldCheck size={18} /><span>RECEITAS ONLINE</span></button>
           <button onClick={() => { setFormData({ name: '', birthDate: '', gender: Gender.MALE, cpf: '', email: '', phone: '', address: '', healthInsurance: '', bloodType: '', allergies: '', preExistingConditions: '', history: '', primaryDoctorId: doctors[0]?.id || '' }); setShowAddModal(true); }} className="bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black text-xs shadow-xl hover:bg-blue-700 flex items-center space-x-2 transition-all active:scale-95"><Plus size={20} /><span>NOVO PACIENTE</span></button>
         </div>
       </div>
