@@ -24,9 +24,10 @@ import {
   CloudOff,
   RefreshCw,
   BarChart3,
-  PieChart
+  PieChart,
+  Pill
 } from 'lucide-react';
-import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus } from './types';
+import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus, Medication } from './types';
 import { storage, AppDatabase } from './services/storage';
 import Dashboard from './components/Dashboard';
 import PatientManager from './components/PatientManager';
@@ -37,8 +38,9 @@ import ExportCenter from './components/ExportCenter';
 import Login from './components/Login';
 import LandingPage from './components/LandingPage';
 import AppointmentReport from './components/AppointmentReport';
+import MedicationRegistry from './components/MedicationRegistry';
 
-type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups' | 'reports';
+type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups' | 'reports' | 'medications';
 
 const App: React.FC = () => {
   const [db, setDb] = useState<AppDatabase>(storage.initLocal());
@@ -47,35 +49,24 @@ const App: React.FC = () => {
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline'>('offline');
-  const [isLoading, setIsLoading] = useState(false); // Inicia como falso para renderizar Landing Page imediatamente
+  const [isLoading, setIsLoading] = useState(false); 
   const [showLanding, setShowLanding] = useState(true);
 
-  // Boot: Sincronização em segundo plano (Não bloqueante)
   useEffect(() => {
     const syncInit = async () => {
-      // Tenta sincronizar silenciosamente
       const cloudData = await storage.fetchFromCloud();
-      
       if (cloudData && Object.keys(cloudData).length > 0) {
-        setDb(prev => ({
-          ...prev,
-          ...cloudData
-        }));
+        setDb(prev => ({ ...prev, ...cloudData }));
         setCloudStatus('connected');
       }
     };
-    
     syncInit();
   }, []);
 
-  // Persistência Atômica (Local + Cloud)
   useEffect(() => {
-    // Salva localmente sempre
     storage.save(db);
-    
-    // Sincroniza com a nuvem apenas se houver mudanças e após debounce
     const cloudSync = async () => {
-      if (currentUser) { // Só tenta sincronização pesada se houver usuário logado
+      if (currentUser) {
         setIsSyncing(true);
         try {
           await storage.syncToCloud(db);
@@ -87,12 +78,10 @@ const App: React.FC = () => {
         }
       }
     };
-
     const timer = setTimeout(cloudSync, 3000);
     return () => clearTimeout(timer);
   }, [db, currentUser]);
 
-  // Se estiver carregando algo crítico (como um import de backup)
   if (isLoading) {
     return (
       <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center">
@@ -104,12 +93,10 @@ const App: React.FC = () => {
     );
   }
 
-  // Prioridade 1: Tela de Capa (Não deve ser bloqueada por rede)
   if (showLanding && !currentUser) {
     return <LandingPage onEnter={() => setShowLanding(false)} />;
   }
 
-  // Prioridade 2: Login
   if (!currentUser) {
     return <Login users={db.users || []} onLogin={setCurrentUser} />;
   }
@@ -127,7 +114,7 @@ const App: React.FC = () => {
     setCurrentView('consultation');
   };
 
-  const handleFinishConsultation = (evolutionData?: { diagnosis: string; conduct: string; complaint: string }) => {
+  const handleFinishConsultation = (evolutionData?: { diagnosis: string; conduct: string; complaint: string; prescription: string }) => {
     if (activeAppointmentId && evolutionData) {
       setDb(prev => {
         const appointment = prev.appointments.find(a => a.id === activeAppointmentId);
@@ -140,7 +127,8 @@ const App: React.FC = () => {
                          `MÉDICO: ${currentUser.name}\n` +
                          `QUEIXA/EVOLUÇÃO: ${evolutionData.complaint}\n` +
                          (evolutionData.diagnosis ? `DIAGNÓSTICO (CID): ${evolutionData.diagnosis}\n` : '') +
-                         (evolutionData.conduct ? `CONDUTA: ${evolutionData.conduct}\n` : '') +
+                         (evolutionData.conduct ? `CONDUTA/PROCEDIMENTOS: ${evolutionData.conduct}\n` : '') +
+                         (evolutionData.prescription ? `RECEITUÁRIO:\n${evolutionData.prescription}\n` : '') +
                          `--------------------------------------------------\n\n`;
         
         const updatedPatients = (prev.patients || []).map(p => 
@@ -161,7 +149,7 @@ const App: React.FC = () => {
           appointments: updatedAppointments
         };
       });
-      alert("Atendimento finalizado com sucesso.");
+      alert("Atendimento e Receituário salvos no histórico.");
     }
     
     setActiveAppointmentId(null);
@@ -213,6 +201,7 @@ const App: React.FC = () => {
           <SidebarItem view="dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" />
           <SidebarItem view="agenda" icon={<Calendar size={18} />} label="Minha Agenda" />
           <SidebarItem view="patients" icon={<Users size={18} />} label="Meus Pacientes" />
+          <SidebarItem view="medications" icon={<Pill size={18} />} label="Medicamentos" />
           <SidebarItem view="reports" icon={<BarChart3 size={18} />} label="Relatórios" adminOnly />
           <SidebarItem view="doctors" icon={<Heart size={18} />} label="Corpo Clínico" adminOnly />
           <SidebarItem view="backups" icon={<Download size={18} />} label="Exportar Dados" adminOnly />
@@ -304,6 +293,16 @@ const App: React.FC = () => {
               isAdmin={currentUser.role === UserRole.ADMIN}
             />
           )}
+          {currentView === 'medications' && (
+            <MedicationRegistry 
+              medications={db.medications || []}
+              setMedications={(newM) => setDb(prev => {
+                const medicationsList = prev.medications || [];
+                const nextMedications = typeof newM === 'function' ? newM(medicationsList) : newM;
+                return { ...prev, medications: nextMedications };
+              })}
+            />
+          )}
           {currentView === 'reports' && (
             <AppointmentReport 
               appointments={db.appointments || []} 
@@ -348,6 +347,7 @@ const App: React.FC = () => {
               appointments={db.appointments || []}
               patients={db.patients || []}
               doctors={db.doctors || []}
+              medications={db.medications || []}
               onFinish={handleFinishConsultation}
             />
           )}

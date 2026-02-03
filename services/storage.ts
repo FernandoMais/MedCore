@@ -1,9 +1,9 @@
 
-import { Patient, Doctor, Appointment, MedicalRecord, User, UserRole } from '../types';
+import { Patient, Doctor, Appointment, MedicalRecord, User, UserRole, Medication } from '../types';
 import { MOCK_PATIENTS, MOCK_DOCTORS, MOCK_APPOINTMENTS } from '../constants';
 import { supabase } from './supabase';
 
-const DB_KEY = 'medcore_pro_db_v2';
+const DB_KEY = 'medcore_pro_db_v3';
 
 export interface AppDatabase {
   users: User[];
@@ -11,6 +11,7 @@ export interface AppDatabase {
   doctors: Doctor[];
   appointments: Appointment[];
   medicalRecords: MedicalRecord[];
+  medications: Medication[];
   lastBackup?: string;
 }
 
@@ -24,10 +25,13 @@ const DEFAULT_DB: AppDatabase = {
   doctors: MOCK_DOCTORS,
   appointments: MOCK_APPOINTMENTS,
   medicalRecords: [],
+  medications: [
+    { id: 'm1', name: 'Amoxicilina', dosage: '500mg', posology: 'Tomar 1 comprimido de 8 em 8 horas', period: '7 dias', purpose: 'Antibiótico', manufacturer: 'Eurofarma' },
+    { id: 'm2', name: 'Dipirona', dosage: '500mg', posology: '1 comprimido se dor ou febre', period: 'Até de 6 em 6 horas', purpose: 'Analgésico e Antitérmico', manufacturer: 'Medley' }
+  ],
 };
 
 export const storage = {
-  // Inicialização síncrona com garantia de estrutura completa
   initLocal: (): AppDatabase => {
     try {
       const saved = localStorage.getItem(DB_KEY);
@@ -39,6 +43,7 @@ export const storage = {
           doctors: Array.isArray(parsed.doctors) ? parsed.doctors : DEFAULT_DB.doctors,
           appointments: Array.isArray(parsed.appointments) ? parsed.appointments : DEFAULT_DB.appointments,
           medicalRecords: Array.isArray(parsed.medicalRecords) ? parsed.medicalRecords : DEFAULT_DB.medicalRecords,
+          medications: Array.isArray(parsed.medications) ? parsed.medications : DEFAULT_DB.medications,
           lastBackup: parsed.lastBackup
         };
       }
@@ -48,10 +53,8 @@ export const storage = {
     return DEFAULT_DB;
   },
 
-  // Busca assíncrona com tratamento de erro silencioso para evitar travamentos (401)
   fetchFromCloud: async (): Promise<Partial<AppDatabase>> => {
     try {
-      // Fazemos o fetch um por um para isolar erros de permissão de tabelas específicas
       const cloudData: Partial<AppDatabase> = {};
       
       const patientsRes = await supabase.from('patients').select('*');
@@ -66,9 +69,11 @@ export const storage = {
       const usersRes = await supabase.from('users').select('*');
       if (!usersRes.error) cloudData.users = usersRes.data;
 
+      const medicationsRes = await supabase.from('medications').select('*');
+      if (!medicationsRes.error) cloudData.medications = medicationsRes.data;
+
       return cloudData;
     } catch (e) {
-      // Em caso de 401 ou qualquer erro de rede, retornamos vazio para usar o local
       console.warn("Supabase Sync: Acesso negado ou erro de rede. Usando dados locais.");
       return {};
     }
@@ -84,14 +89,14 @@ export const storage = {
 
   syncToCloud: async (db: AppDatabase) => {
     try {
-      // Tenta persistir na nuvem
       if (db.patients?.length > 0) await supabase.from('patients').upsert(db.patients);
       if (db.doctors?.length > 0) await supabase.from('doctors').upsert(db.doctors);
       if (db.appointments?.length > 0) await supabase.from('appointments').upsert(db.appointments);
       if (db.users?.length > 0) await supabase.from('users').upsert(db.users);
+      if (db.medications?.length > 0) await supabase.from('medications').upsert(db.medications);
     } catch (e) {
       console.error("Erro na sincronização cloud:", e);
-      throw e; // Lança para que o App saiba que está offline
+      throw e;
     }
   },
 

@@ -104,3 +104,13 @@ export interface Prescription {
   frequency: string;
   duration: string;
 }
+
+export interface Medication {
+  id: string;
+  name: string;
+  dosage: string;
+  posology?: string;
+  period?: string;
+  purpose?: string;
+  manufacturer?: string;
+}

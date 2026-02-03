@@ -22,7 +22,7 @@
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
-            aside, header, nav, button, .no-print, #sidebar, .tabs-navigation, .alert-banner { display: none !important; }
+            aside, header, nav, button, .no-print, #sidebar, .tabs-navigation, .alert-banner, .no-print-area { display: none !important; }
             
             .print-only { display: block !important; }
             
@@ -34,14 +34,39 @@
                 overflow: visible !important;
             }
 
-            .printable-document { 
+            /* Estilo específico para Receita Médica */
+            .prescription-print {
                 display: block !important;
-                position: relative !important;
-                width: 100% !important;
-                border: none !important;
-                box-shadow: none !important;
-                margin: 0 !important;
-                padding: 0 !important;
+                padding: 40pt;
+                border: 1pt solid #eee;
+                min-height: 100%;
+            }
+
+            .prescription-header {
+                text-align: center;
+                border-bottom: 2pt solid #2563eb;
+                margin-bottom: 30pt;
+                padding-bottom: 10pt;
+            }
+
+            .prescription-body {
+                font-size: 12pt;
+                line-height: 1.6;
+                margin-bottom: 50pt;
+                min-height: 400pt;
+            }
+
+            .prescription-footer {
+                text-align: center;
+                margin-top: 50pt;
+                border-top: 1pt solid #ccc;
+                padding-top: 10pt;
+            }
+
+            .signature-line {
+                width: 250pt;
+                border-top: 1pt solid black;
+                margin: 40pt auto 5pt auto;
             }
 
             /* Estilização da Evolução no PDF */
@@ -51,26 +76,7 @@
                 word-wrap: break-word !important;
             }
 
-            .evolution-block {
-                page-break-inside: avoid;
-                border-bottom: 1pt solid #eee;
-                margin-bottom: 10pt;
-                padding-bottom: 10pt;
-            }
-
             h1, h2, h3 { color: black !important; page-break-after: avoid; }
-            
-            .print-alert { 
-                border: 1px solid #000 !important; 
-                padding: 10px !important;
-                background-color: #f9f9f9 !important;
-                margin-bottom: 15px !important;
-                page-break-inside: avoid;
-            }
-
-            /* Forçar cores de fundo em PDF */
-            .bg-slate-50 { background-color: #f8fafc !important; }
-            .bg-blue-600 { background-color: #2563eb !important; color: white !important; }
         }
 
         .print-only { display: none; }

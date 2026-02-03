@@ -276,11 +276,12 @@ const AppointmentReport: React.FC<AppointmentReportProps> = ({ appointments, pat
   );
 };
 
+// Fix: Added safety check and any casting to React.ReactElement to resolve TS error with 'size' prop in cloneElement
 const StatCard: React.FC<{ title: string; value: number | string; icon: React.ReactNode }> = ({ title, value, icon }) => (
   <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm hover:shadow-lg transition-all">
     <div className="flex items-center justify-between mb-4">
       <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center shadow-inner">
-        {React.cloneElement(icon as React.ReactElement, { size: 24 })}
+        {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 24 }) : icon}
       </div>
       <ChevronRight size={18} className="text-slate-100" />
     </div>
