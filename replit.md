@@ -27,3 +27,4 @@ MedCore Pro is a React + Vite clinical management web app. It includes patient, 
 - New runtime records use `crypto.randomUUID()` for patients, files, doctors, users, appointments, and medications.
 - Sensitive consultation specialties such as Psicologia and Psiquiatria require an access password before finalization; the stored value is SHA-256 hashed.
 - Backup export receives the current in-memory database state so recent unsynced edits are included.
+- Every successful login resets the app to the Dashboard view and clears any previously active consultation/page state.

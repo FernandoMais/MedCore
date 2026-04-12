@@ -90,6 +90,20 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [db, currentUser]);
 
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+    setCurrentView('dashboard');
+    setActiveAppointmentId(null);
+    setShowLanding(false);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setCurrentView('dashboard');
+    setActiveAppointmentId(null);
+    setShowLanding(true);
+  };
+
   if (isLoading) {
     return (
       <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center">
@@ -106,7 +120,7 @@ const App: React.FC = () => {
   }
 
   if (!currentUser) {
-    return <Login users={db.users || []} onLogin={setCurrentUser} />;
+    return <Login users={db.users || []} onLogin={handleLogin} />;
   }
 
   const filteredPatients = (db.patients || []).filter(p => 
@@ -301,10 +315,7 @@ const App: React.FC = () => {
             </div>
           </div>
           <button 
-            onClick={() => {
-              setCurrentUser(null);
-              setShowLanding(true);
-            }}
+            onClick={handleLogout}
             className="w-full flex items-center space-x-3 px-4 py-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
           >
             <LogOut size={18} />
