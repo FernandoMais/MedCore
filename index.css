@@ -45,14 +45,16 @@ body {
     display: block !important;
     padding: 15mm;
     border: none;
-    width: 100%;
+    width: auto;
     margin: 0;
     background: white !important;
-    position: relative;
+    position: static !important;
   }
   body.printing-prescription #root,
   body.printing-exam #root {
-    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
   }
   .prescription-header {
     text-align: center;

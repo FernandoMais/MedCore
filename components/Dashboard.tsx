@@ -43,7 +43,7 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
           <p className="text-sm lg:text-base text-slate-500 mt-1 font-medium">Resumo operacional da clínica para hoje.</p>
         </div>
         <div className="flex items-center space-x-2 text-[10px] lg:text-sm bg-white border border-slate-200 px-4 py-2 rounded-full shadow-sm self-start md:self-auto">
-          <Calendar size={14} lg:size={16} className="text-blue-500" />
+          <Calendar size={16} className="text-blue-500" />
           <span className="font-black text-slate-600 uppercase tracking-widest">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
         </div>
       </div>
@@ -137,7 +137,11 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
               bgColor="bg-emerald-50"
             />
           </div>
-          <button className="w-full mt-8 py-4 text-[10px] font-black text-blue-600 hover:bg-blue-50 rounded-2xl transition-colors border border-dashed border-blue-200 uppercase tracking-widest">
+          <button
+            type="button"
+            onClick={() => alert('Central de mensagens sem novas pendências no momento.')}
+            className="w-full mt-8 py-4 text-[10px] font-black text-blue-600 hover:bg-blue-50 rounded-2xl transition-colors border border-dashed border-blue-200 uppercase tracking-widest"
+          >
             Ver Central de Mensagens
           </button>
         </div>

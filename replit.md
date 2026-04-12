@@ -23,3 +23,7 @@ MedCore Pro is a React + Vite clinical management web app. It includes patient, 
 
 - `GEMINI_API_KEY` is read by Vite and exposed to the client build for the existing Gemini service.
 - Supabase URL and publishable anon key are currently defined in `services/supabase.ts`.
+- Consultation print mode uses body classes to show only the prescription or exam portal content during print; the main app root is hidden with visibility rather than display to avoid blank pages.
+- New runtime records use `crypto.randomUUID()` for patients, files, doctors, users, appointments, and medications.
+- Sensitive consultation specialties such as Psicologia and Psiquiatria require an access password before finalization; the stored value is SHA-256 hashed.
+- Backup export receives the current in-memory database state so recent unsynced edits are included.

@@ -66,9 +66,16 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
     d.crm.includes(searchTerm)
   );
 
+  const createId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+
   const handleAddDoctor = (e: React.FormEvent) => {
     e.preventDefault();
-    const doctorId = 'd' + Date.now().toString();
+    if (users.some(user => user.username.toLowerCase() === formData.username.trim().toLowerCase())) {
+      alert('Já existe um usuário com esse nome de acesso.');
+      return;
+    }
+
+    const doctorId = createId('doctor');
     
     // Create Doctor Record
     const newDoctor: Doctor = {
@@ -85,8 +92,8 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
 
     // Create User Record
     const newUser: User = {
-      id: 'u' + Date.now().toString(),
-      username: formData.username,
+      id: createId('user'),
+      username: formData.username.trim(),
       password: formData.password,
       name: formData.name,
       role: formData.role,
@@ -182,7 +189,12 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <button className="p-3 text-slate-500 hover:bg-slate-100 rounded-2xl transition-colors">
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              title="Limpar busca"
+              className="p-3 text-slate-500 hover:bg-slate-100 rounded-2xl transition-colors"
+            >
               <Filter size={20} />
             </button>
           </div>
@@ -496,7 +508,11 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
                       <Edit3 size={18} />
                       <span>Editar Perfil</span>
                     </button>
-                    <button className="px-12 py-4 bg-blue-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
+                    <button
+                      type="button"
+                      onClick={startEditing}
+                      className="px-12 py-4 bg-blue-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95"
+                    >
                       Gerenciar Escalas
                     </button>
                   </>

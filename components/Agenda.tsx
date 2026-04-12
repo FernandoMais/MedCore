@@ -70,6 +70,17 @@ const Agenda: React.FC<AgendaProps> = ({
     room: 'Consultório 01'
   });
 
+  const createId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+
+  const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
+    setAppointments(prev => prev.map(appt => appt.id === id ? { ...appt, status } : appt));
+  };
+
+  const handleStartConsultation = (id: string) => {
+    updateAppointmentStatus(id, AppointmentStatus.IN_PROGRESS);
+    startConsultation(id);
+  };
+
   const getStatusConfig = (status: AppointmentStatus) => {
     switch (status) {
       case AppointmentStatus.CONFIRMED: 
@@ -109,7 +120,7 @@ const Agenda: React.FC<AgendaProps> = ({
     }
 
     const createdAppt: Appointment = {
-      id: 'appt-' + Date.now(),
+      id: createId('appt'),
       ...newAppt,
       status: AppointmentStatus.SCHEDULED
     };
@@ -149,9 +160,17 @@ const Agenda: React.FC<AgendaProps> = ({
                 </div>
                 <div className="space-y-2 flex-1 overflow-y-auto max-h-[250px] lg:max-h-[300px] scrollbar-hide">
                   {appts.map(a => (
-                    <div key={a.id} className={`${getStatusConfig(a.status).bg} p-2 rounded-xl border ${getStatusConfig(a.status).border} text-[9px] lg:text-[10px] font-bold truncate cursor-pointer hover:brightness-95 transition-all`}>
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate(date);
+                        setView('day');
+                      }}
+                      className={`w-full text-left ${getStatusConfig(a.status).bg} p-2 rounded-xl border ${getStatusConfig(a.status).border} text-[9px] lg:text-[10px] font-bold truncate cursor-pointer hover:brightness-95 transition-all`}
+                    >
                       {a.time} - {patients.find(p => p.id === a.patientId)?.name.split(' ')[0] || 'Paciente'}
-                    </div>
+                    </button>
                   ))}
                   {appts.length === 0 && <p className="text-[9px] text-slate-300 font-bold text-center mt-10 italic uppercase">Livre</p>}
                 </div>
@@ -360,12 +379,36 @@ const Agenda: React.FC<AgendaProps> = ({
                             <div className={`w-1.5 lg:w-2 h-1.5 lg:h-2 rounded-full ${statusConfig.color} mr-2 shadow-sm`}></div>
                             <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">{appt.status}</span>
                           </div>
-                          <button 
-                            onClick={() => startConsultation(appt.id)}
+                          <div className="flex flex-col gap-2">
+                            {appt.status !== AppointmentStatus.FINISHED && (
+                              <div className="flex gap-2">
+                                {appt.status !== AppointmentStatus.CONFIRMED && (
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAppointmentStatus(appt.id, AppointmentStatus.CONFIRMED)}
+                                    className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all"
+                                  >
+                                    Confirmar
+                                  </button>
+                                )}
+                                {appt.status !== AppointmentStatus.ABSENT && (
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAppointmentStatus(appt.id, AppointmentStatus.ABSENT)}
+                                    className="px-3 py-2 rounded-xl bg-red-50 text-red-700 text-[9px] font-black uppercase tracking-widest hover:bg-red-100 transition-all"
+                                  >
+                                    Faltou
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                            <button 
+                            onClick={() => handleStartConsultation(appt.id)}
                             className="bg-slate-900 text-white px-5 lg:px-6 py-2.5 lg:py-3 rounded-xl lg:rounded-2xl text-[9px] lg:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
                           >
                             Atender
                           </button>
+                          </div>
                         </div>
                       </div>
                     );

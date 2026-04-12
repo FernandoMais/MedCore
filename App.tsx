@@ -416,7 +416,7 @@ const App: React.FC = () => {
           )}
           {currentView === 'backups' && (
             <ExportCenter 
-              onExport={storage.exportBackup} 
+              onExport={() => storage.exportBackup(db)} 
               onImport={async (file) => {
                 try {
                   setIsLoading(true);

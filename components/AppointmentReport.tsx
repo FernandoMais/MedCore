@@ -38,6 +38,18 @@ const AppointmentReport: React.FC<AppointmentReportProps> = ({ appointments, pat
   const getPatient = (id: string) => patients.find(p => p.id === id);
   const getDoctor = (id: string) => doctors.find(d => d.id === id);
 
+  const openWhatsApp = (phone?: string) => {
+    const digits = phone?.replace(/\D/g, '') || '';
+    if (!digits) return;
+    const normalized = digits.startsWith('55') ? digits : `55${digits}`;
+    window.open(`https://wa.me/${normalized}`, '_blank');
+  };
+
+  const openEmail = (email?: string) => {
+    if (!email) return;
+    window.open(`mailto:${email}`, '_blank');
+  };
+
   const filteredData = useMemo(() => {
     return appointments.filter(appt => {
       const patient = getPatient(appt.patientId);
@@ -214,7 +226,11 @@ const AppointmentReport: React.FC<AppointmentReportProps> = ({ appointments, pat
             {/* Corpo do Modal */}
             <div className="p-10 space-y-8">
               <div className="space-y-6">
-                <div className="flex items-center space-x-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-blue-200 transition-colors cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => openWhatsApp(getPatient(selectedAppointment.patientId)?.phone)}
+                  className="w-full text-left flex items-center space-x-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-blue-200 transition-colors cursor-pointer"
+                >
                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
                     <Phone size={18} />
                   </div>
@@ -223,9 +239,13 @@ const AppointmentReport: React.FC<AppointmentReportProps> = ({ appointments, pat
                     <p className="text-sm font-black text-slate-800">{getPatient(selectedAppointment.patientId)?.phone}</p>
                   </div>
                   <ExternalLink size={16} className="text-slate-300 group-hover:text-blue-500" />
-                </div>
+                </button>
 
-                <div className="flex items-center space-x-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-blue-200 transition-colors cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => openEmail(getPatient(selectedAppointment.patientId)?.email)}
+                  className="w-full text-left flex items-center space-x-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-blue-200 transition-colors cursor-pointer"
+                >
                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
                     <Mail size={18} />
                   </div>
@@ -234,7 +254,7 @@ const AppointmentReport: React.FC<AppointmentReportProps> = ({ appointments, pat
                     <p className="text-sm font-black text-slate-800 truncate">{getPatient(selectedAppointment.patientId)?.email}</p>
                   </div>
                   <ExternalLink size={16} className="text-slate-300 group-hover:text-blue-500" />
-                </div>
+                </button>
 
                 <div className="flex items-center space-x-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm">

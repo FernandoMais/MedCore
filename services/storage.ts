@@ -104,9 +104,12 @@ export const storage = {
     return await supabase.from('evolucao_paciente').insert([evolution]);
   },
 
-  exportBackup: () => {
-    const data = localStorage.getItem(DB_KEY);
-    if (!data) return;
+  exportBackup: (db?: AppDatabase) => {
+    const data = JSON.stringify(db ? { ...db, lastBackup: new Date().toISOString() } : JSON.parse(localStorage.getItem(DB_KEY) || 'null'));
+    if (!data || data === 'null') {
+      alert("Nenhum dado disponível para exportar.");
+      return;
+    }
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -123,7 +126,7 @@ export const storage = {
         try {
           const content = e.target?.result as string;
           const data = JSON.parse(content);
-          if (data && (data.patients || data.doctors || data.users)) {
+          if (data && Array.isArray(data.patients) && Array.isArray(data.doctors) && Array.isArray(data.users)) {
             localStorage.setItem(DB_KEY, content);
             resolve();
           } else {

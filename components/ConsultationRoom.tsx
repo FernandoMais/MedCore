@@ -88,6 +88,21 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     m.purpose?.toLowerCase().includes(medSearch.toLowerCase())
   ).slice(0, 5);
 
+  const createId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+
+  const isSensitiveSpecialty = (value: string) => {
+    const normalized = value.toLowerCase();
+    return normalized.includes('psicologia') || normalized.includes('psiquiatria');
+  };
+
+  const hashAccessPassword = async (value: string) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(value);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
   useEffect(() => {
     const draft = localStorage.getItem(`medcore_consult_draft_${appointmentId}`);
     if (draft) {
@@ -146,7 +161,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     
     // 2. Salvar no cadastro global de medicamentos para uso futuro
     const newMed: Medication = {
-      id: 'med-' + Date.now(),
+      id: createId('med'),
       name: newMedName,
       dosage: newMedDosage,
       posology: newMedPosology,
@@ -170,16 +185,16 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     
     console.log(`Iniciando impressão de ${type}...`);
     const className = type === 'prescription' ? 'printing-prescription' : 'printing-exam';
+    const cleanup = () => {
+      document.body.classList.remove(className);
+      window.removeEventListener('afterprint', cleanup);
+    };
     document.body.classList.add(className);
-    
-    // Pequeno delay para garantir que o DOM atualizou com a classe
-    setTimeout(() => {
+    window.addEventListener('afterprint', cleanup);
+    requestAnimationFrame(() => {
       window.print();
-      // Remove a classe após um tempo maior para garantir que a janela de impressão abriu
-      setTimeout(() => {
-        document.body.classList.remove(className);
-      }, 300);
-    }, 50);
+      setTimeout(cleanup, 1000);
+    });
   };
 
   const openOfficialPrescription = () => {
@@ -196,20 +211,25 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
       return;
     }
 
+    if (isSensitiveSpecialty(specialty) && !accessPassword.trim()) {
+      alert("Informe a senha de acesso sigiloso para atendimentos de Psicologia ou Psiquiatria.");
+      return;
+    }
+
     if (window.confirm("Confirmar encerramento da consulta?\n\nOs dados serão arquivados no prontuário do paciente permanentemente.")) {
       setIsFinishing(true);
       
       try {
         console.log("Finalizando consulta para o atendimento:", appointmentId);
+        const protectedPassword = accessPassword.trim() ? await hashAccessPassword(accessPassword.trim()) : '';
         
-        // Chama a função onFinish vinda do App.tsx com os dados coletados
         await onFinish({ 
           diagnosis, 
           conduct, 
           complaint, 
           prescription,
           especialidade: specialty,
-          senha_acesso: accessPassword
+          senha_acesso: protectedPassword
         });
 
         // Remove o rascunho do localStorage APÓS o sucesso do onFinish
@@ -344,7 +364,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             onClick={() => onFinish()} 
             className="p-2.5 lg:p-3 bg-slate-100 text-slate-600 rounded-xl lg:rounded-2xl hover:bg-slate-200 transition-all active:scale-90"
           >
-            <ChevronLeft size={18} lg:size={20} />
+            <ChevronLeft size={20} />
           </button>
           <div className="flex items-center space-x-3 lg:space-x-4 overflow-hidden">
             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-blue-600 rounded-xl lg:rounded-2xl flex items-center justify-center text-white font-black text-lg lg:text-xl shadow-xl ring-4 ring-blue-50 shrink-0">
@@ -367,7 +387,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             className="shrink-0 px-4 lg:px-5 py-3 lg:py-4 bg-white border border-slate-200 text-emerald-600 rounded-xl lg:rounded-[20px] hover:bg-emerald-50 hover:border-emerald-300 transition-all active:scale-95 shadow-sm flex items-center space-x-2"
             title="Imprimir Pedido de Exames"
            >
-              <Printer size={16} lg:size={18} />
+              <Printer size={18} />
               <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">Exames</span>
            </button>
 
@@ -377,7 +397,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             className="shrink-0 px-4 lg:px-5 py-3 lg:py-4 bg-white border border-slate-200 text-blue-600 rounded-xl lg:rounded-[20px] hover:bg-blue-50 hover:border-blue-300 transition-all active:scale-95 shadow-sm flex items-center space-x-2"
             title="Imprimir Receituário Interno"
            >
-              <Printer size={16} lg:size={18} />
+              <Printer size={18} />
               <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">Receita</span>
            </button>
 
@@ -386,7 +406,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             onClick={openOfficialPrescription}
             className="shrink-0 px-5 lg:px-6 py-3 lg:py-4 bg-emerald-600 text-white rounded-xl lg:rounded-[20px] font-black text-[10px] lg:text-xs uppercase tracking-widest flex items-center space-x-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
            >
-              <ShieldCheck size={16} lg:size={18} />
+              <ShieldCheck size={18} />
               <span>Receitas Online</span>
            </button>
         </div>
@@ -424,7 +444,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
           <div className="bg-white p-6 lg:p-8 rounded-[30px] lg:rounded-[40px] border border-slate-200 shadow-sm space-y-6 lg:space-y-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
               <h3 className="text-lg lg:text-xl font-black text-slate-800 tracking-tight flex items-center">
-                <FileEdit size={20} lg:size={22} className="mr-3 text-emerald-600" />
+                <FileEdit size={22} className="mr-3 text-emerald-600" />
                 Evolução & Conduta
               </h3>
               <div className="flex items-center space-x-2">
@@ -470,7 +490,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                 />
               </div>
 
-              {(specialty.toLowerCase().includes('psicologia') || specialty.toLowerCase().includes('psiquiatria')) && (
+              {isSensitiveSpecialty(specialty) && (
                 <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
                   <div className="flex items-center justify-between ml-2">
                     <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Senha de Acesso Sigiloso (Obrigatório)</label>

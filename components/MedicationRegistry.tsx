@@ -39,6 +39,8 @@ const MedicationRegistry: React.FC<MedicationRegistryProps> = ({ medications, se
     m.purpose?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const createId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+
   const handleOpenModal = (med?: Medication) => {
     if (med) {
       setEditingMedication(med);
@@ -62,7 +64,7 @@ const MedicationRegistry: React.FC<MedicationRegistryProps> = ({ medications, se
     } else {
       const newMed: Medication = {
         ...formData as Medication,
-        id: 'med-' + Date.now()
+        id: createId('med')
       };
       setMedications(prev => [newMed, ...prev]);
     }

@@ -46,6 +46,8 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
 
   const selectedPatient = patients.find(p => p.id === selectedPatientId) || null;
 
+  const createId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+
   const [formData, setFormData] = useState<any>({
     name: '', birthDate: '', gender: Gender.MALE, cpf: '', email: '', 
     phone: '', address: '', healthInsurance: '', bloodType: '', 
@@ -64,8 +66,13 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
     const safeName = selectedPatient.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
     const dateStr = new Date().toISOString().split('T')[0];
     document.title = `Prontuario_${safeName}_${dateStr}`;
+    const restoreTitle = () => {
+      document.title = originalTitle;
+      window.removeEventListener('afterprint', restoreTitle);
+    };
+    window.addEventListener('afterprint', restoreTitle);
     window.print();
-    document.title = originalTitle;
+    setTimeout(restoreTitle, 1000);
   };
 
   const openFileInNewTab = (file: MedicalFile) => {
@@ -106,7 +113,7 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
 
     const processedPatient: Patient = {
       ...formData,
-      id: showEditModal ? selectedPatient!.id : Date.now().toString(),
+      id: showEditModal ? selectedPatient!.id : createId('patient'),
       allergies: typeof formData.allergies === 'string' ? formData.allergies.split(',').map((a: string) => a.trim()).filter((a: string) => a !== '') : formData.allergies,
       preExistingConditions: typeof formData.preExistingConditions === 'string' ? formData.preExistingConditions.split(',').map((c: string) => c.trim()).filter((c: string) => c !== '') : formData.preExistingConditions,
       createdAt: showEditModal ? selectedPatient!.createdAt : new Date().toISOString(),
@@ -119,6 +126,7 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
       }
       return [processedPatient, ...prev];
     });
+    setSelectedPatientId(processedPatient.id);
 
     setTimeout(() => {
       setIsSaving(false);
@@ -134,7 +142,7 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
     const reader = new FileReader();
     reader.onload = (event) => {
       const newFile: MedicalFile = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: createId('file'),
         name: file.name, type: file.type, size: file.size,
         date: new Date().toISOString(),
         url: event.target?.result as string,
