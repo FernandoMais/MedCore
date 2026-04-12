@@ -131,32 +131,34 @@ const Agenda: React.FC<AgendaProps> = ({
     });
 
     return (
-      <div className="grid grid-cols-7 gap-4">
-        {days.map(date => {
-          const appts = filteredAppointments.filter(a => a.date === date);
-          const isToday = date === getLocalDateString();
-          const displayObj = formatDisplayDate(date);
-          return (
-            <div key={date} className={`bg-white rounded-[24px] border ${isToday ? 'border-blue-500 ring-2 ring-blue-500/5' : 'border-slate-100'} p-4 min-h-[400px] flex flex-col shadow-sm`}>
-              <div className="text-center mb-4 pb-4 border-b border-slate-50">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {displayObj.toLocaleDateString('pt-BR', { weekday: 'short' })}
-                </p>
-                <p className={`text-xl font-black ${isToday ? 'text-blue-600' : 'text-slate-800'}`}>
-                  {displayObj.getDate()}
-                </p>
+      <div className="overflow-x-auto pb-4 -mx-4 px-4 lg:mx-0 lg:px-0">
+        <div className="grid grid-cols-7 gap-2 lg:gap-4 min-w-[800px] lg:min-w-0">
+          {days.map(date => {
+            const appts = filteredAppointments.filter(a => a.date === date);
+            const isToday = date === getLocalDateString();
+            const displayObj = formatDisplayDate(date);
+            return (
+              <div key={date} className={`bg-white rounded-[24px] border ${isToday ? 'border-blue-500 ring-2 ring-blue-500/5' : 'border-slate-100'} p-3 lg:p-4 min-h-[300px] lg:min-h-[400px] flex flex-col shadow-sm`}>
+                <div className="text-center mb-4 pb-4 border-b border-slate-50">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {displayObj.toLocaleDateString('pt-BR', { weekday: 'short' })}
+                  </p>
+                  <p className={`text-lg lg:text-xl font-black ${isToday ? 'text-blue-600' : 'text-slate-800'}`}>
+                    {displayObj.getDate()}
+                  </p>
+                </div>
+                <div className="space-y-2 flex-1 overflow-y-auto max-h-[250px] lg:max-h-[300px] scrollbar-hide">
+                  {appts.map(a => (
+                    <div key={a.id} className={`${getStatusConfig(a.status).bg} p-2 rounded-xl border ${getStatusConfig(a.status).border} text-[9px] lg:text-[10px] font-bold truncate cursor-pointer hover:brightness-95 transition-all`}>
+                      {a.time} - {patients.find(p => p.id === a.patientId)?.name.split(' ')[0] || 'Paciente'}
+                    </div>
+                  ))}
+                  {appts.length === 0 && <p className="text-[9px] text-slate-300 font-bold text-center mt-10 italic uppercase">Livre</p>}
+                </div>
               </div>
-              <div className="space-y-2 flex-1 overflow-y-auto max-h-[300px] scrollbar-hide">
-                {appts.map(a => (
-                  <div key={a.id} className={`${getStatusConfig(a.status).bg} p-2 rounded-xl border ${getStatusConfig(a.status).border} text-[10px] font-bold truncate cursor-pointer hover:brightness-95 transition-all`}>
-                    {a.time} - {patients.find(p => p.id === a.patientId)?.name.split(' ')[0] || 'Paciente'}
-                  </div>
-                ))}
-                {appts.length === 0 && <p className="text-[9px] text-slate-300 font-bold text-center mt-10 italic uppercase">Livre</p>}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     );
   };
@@ -169,42 +171,44 @@ const Agenda: React.FC<AgendaProps> = ({
     const startingDay = firstDay.getDay();
 
     return (
-      <div className="bg-white rounded-[32px] border border-slate-200 overflow-hidden shadow-sm">
-        <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-100 py-3">
-          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-            <div key={d} className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">{d}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7">
-          {Array.from({ length: 42 }).map((_, i) => {
-            const dayNum = i - startingDay + 1;
-            const currentDayDate = dayNum > 0 && dayNum <= daysInMonth 
-              ? getLocalDateString(new Date(date.getFullYear(), date.getMonth(), dayNum)) 
-              : null;
-            
-            const apptsCount = currentDayDate ? filteredAppointments.filter(a => a.date === currentDayDate).length : 0;
-            const isToday = currentDayDate === getLocalDateString();
+      <div className="overflow-x-auto pb-4 -mx-4 px-4 lg:mx-0 lg:px-0">
+        <div className="bg-white rounded-[24px] lg:rounded-[32px] border border-slate-200 overflow-hidden shadow-sm min-w-[700px] lg:min-w-0">
+          <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-100 py-3">
+            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
+              <div key={d} className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">{d}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {Array.from({ length: 42 }).map((_, i) => {
+              const dayNum = i - startingDay + 1;
+              const currentDayDate = dayNum > 0 && dayNum <= daysInMonth 
+                ? getLocalDateString(new Date(date.getFullYear(), date.getMonth(), dayNum)) 
+                : null;
+              
+              const apptsCount = currentDayDate ? filteredAppointments.filter(a => a.date === currentDayDate).length : 0;
+              const isToday = currentDayDate === getLocalDateString();
 
-            return (
-              <div 
-                key={i} 
-                className={`h-24 p-2 border-r border-b border-slate-50 flex flex-col justify-between ${!currentDayDate ? 'bg-slate-50/50' : 'hover:bg-blue-50/20 transition-colors cursor-pointer'}`} 
-                onClick={() => currentDayDate && setSelectedDate(currentDayDate)}
-              >
-                {currentDayDate && (
-                  <>
-                    <span className={`text-xs font-black ${isToday ? 'bg-blue-600 text-white w-6 h-6 flex items-center justify-center rounded-lg shadow-lg' : 'text-slate-500'}`}>{dayNum}</span>
-                    {apptsCount > 0 && (
-                      <div className="flex items-center space-x-1">
-                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                        <span className="text-[9px] font-black text-blue-600 uppercase tracking-tighter">{apptsCount} {apptsCount === 1 ? 'Consulta' : 'Consultas'}</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            );
-          })}
+              return (
+                <div 
+                  key={i} 
+                  className={`h-20 lg:h-24 p-2 border-r border-b border-slate-50 flex flex-col justify-between ${!currentDayDate ? 'bg-slate-50/50' : 'hover:bg-blue-50/20 transition-colors cursor-pointer'}`} 
+                  onClick={() => currentDayDate && setSelectedDate(currentDayDate)}
+                >
+                  {currentDayDate && (
+                    <>
+                      <span className={`text-xs font-black ${isToday ? 'bg-blue-600 text-white w-6 h-6 flex items-center justify-center rounded-lg shadow-lg' : 'text-slate-500'}`}>{dayNum}</span>
+                      {apptsCount > 0 && (
+                        <div className="flex items-center space-x-1">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <span className="text-[8px] lg:text-[9px] font-black text-blue-600 uppercase tracking-tighter">{apptsCount} {apptsCount === 1 ? 'Consulta' : 'Consultas'}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -212,25 +216,25 @@ const Agenda: React.FC<AgendaProps> = ({
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 pb-10">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 no-print">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 no-print">
         <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Agenda Médica</h1>
-          <p className="text-slate-500 font-medium tracking-tight">Planejamento e controle de fluxo operacional.</p>
+          <h1 className="text-2xl lg:text-3xl font-black text-slate-800 tracking-tight">Agenda Médica</h1>
+          <p className="text-sm lg:text-base text-slate-500 font-medium tracking-tight">Planejamento e controle de fluxo operacional.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <button 
             onClick={() => setShowAddModal(true)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center space-x-2 mr-2"
+            className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center space-x-2"
           >
             <Plus size={18} />
             <span>Novo Agendamento</span>
           </button>
 
-          <div className="flex bg-white rounded-2xl border border-slate-200 p-1.5 shadow-sm">
-            <button onClick={() => setView('day')} className={`px-5 py-2 text-xs font-black rounded-xl uppercase tracking-widest transition-all ${view === 'day' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>Dia</button>
-            <button onClick={() => setView('week')} className={`px-5 py-2 text-xs font-black rounded-xl uppercase tracking-widest transition-all ${view === 'week' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>Semana</button>
-            <button onClick={() => setView('month')} className={`px-5 py-2 text-xs font-black rounded-xl uppercase tracking-widest transition-all ${view === 'month' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>Mês</button>
+          <div className="flex bg-white rounded-2xl border border-slate-200 p-1 shadow-sm">
+            <button onClick={() => setView('day')} className={`flex-1 sm:flex-none px-4 lg:px-5 py-2 text-[10px] lg:text-xs font-black rounded-xl uppercase tracking-widest transition-all ${view === 'day' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>Dia</button>
+            <button onClick={() => setView('week')} className={`flex-1 sm:flex-none px-4 lg:px-5 py-2 text-[10px] lg:text-xs font-black rounded-xl uppercase tracking-widest transition-all ${view === 'week' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>Semana</button>
+            <button onClick={() => setView('month')} className={`flex-1 sm:flex-none px-4 lg:px-5 py-2 text-[10px] lg:text-xs font-black rounded-xl uppercase tracking-widest transition-all ${view === 'month' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>Mês</button>
           </div>
         </div>
       </div>
@@ -246,8 +250,8 @@ const Agenda: React.FC<AgendaProps> = ({
             </div>
             
             <div className="grid grid-cols-7 gap-1 text-center mb-4">
-              {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(d => (
-                <span key={d} className="text-[10px] font-black text-slate-300">{d}</span>
+              {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
+                <span key={`${d}-${i}`} className="text-[10px] font-black text-slate-300">{d}</span>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-1">
@@ -309,14 +313,14 @@ const Agenda: React.FC<AgendaProps> = ({
         <div className="lg:col-span-9 animate-in fade-in duration-500">
           {view === 'day' && (
             <div className="bg-white border border-slate-200 rounded-[40px] shadow-sm overflow-hidden flex flex-col min-h-[600px]">
-              <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div className="px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 shadow-inner">
                     <CalendarIcon size={18} />
                   </div>
                   <div>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visualização Diária</span>
-                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight">
+                    <p className="text-xs lg:text-sm font-black text-slate-800 uppercase tracking-tight">
                       {formatDisplayDate(selectedDate).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </p>
                   </div>
@@ -331,34 +335,34 @@ const Agenda: React.FC<AgendaProps> = ({
                     const statusConfig = getStatusConfig(appt.status);
                     
                     return (
-                      <div key={appt.id} className="group p-8 flex flex-col sm:flex-row items-center hover:bg-slate-50/50 transition-all border-l-0 hover:border-l-[12px] hover:border-l-blue-600">
-                        <div className="w-24 shrink-0 text-center sm:text-left mb-4 sm:mb-0">
-                          <span className="text-2xl font-black text-slate-800 tracking-tighter">{appt.time}</span>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">45 MINUTOS</p>
+                      <div key={appt.id} className="group p-6 lg:p-8 flex flex-col sm:flex-row items-center hover:bg-slate-50/50 transition-all border-l-0 lg:hover:border-l-[12px] lg:hover:border-l-blue-600">
+                        <div className="w-full sm:w-24 shrink-0 text-center sm:text-left mb-4 sm:mb-0">
+                          <span className="text-xl lg:text-2xl font-black text-slate-800 tracking-tighter">{appt.time}</span>
+                          <p className="text-[9px] lg:text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">45 MINUTOS</p>
                         </div>
                         
-                        <div className="flex-1 flex items-center space-x-6 sm:ml-6">
-                          <div className={`w-16 h-16 rounded-[24px] flex items-center justify-center font-black text-xl shadow-xl transition-all group-hover:scale-110 ${patient?.allergies && patient.allergies.length > 0 ? 'bg-red-100 text-red-600' : 'bg-blue-600 text-white'}`}>
+                        <div className="flex-1 flex items-center space-x-4 lg:space-x-6 sm:ml-6 w-full">
+                          <div className={`w-12 h-12 lg:w-16 lg:h-16 rounded-xl lg:rounded-[24px] flex items-center justify-center font-black text-lg lg:text-xl shadow-xl transition-all group-hover:scale-110 shrink-0 ${patient?.allergies && patient.allergies.length > 0 ? 'bg-red-100 text-red-600' : 'bg-blue-600 text-white'}`}>
                             {patient?.name.charAt(0) || 'P'}
                           </div>
-                          <div className="overflow-hidden">
-                            <h4 className="font-black text-slate-800 text-lg group-hover:text-blue-600 transition-colors truncate">{patient?.name || 'Paciente'}</h4>
-                            <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                              <span className="flex items-center bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm"><Users size={12} className="mr-2 text-blue-500" /> {appt.type}</span>
-                              <span className="flex items-center bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm"><MapPin size={12} className="mr-2 text-emerald-500" /> {appt.room}</span>
-                              <span className="flex items-center text-slate-500"><Stethoscope size={12} className="mr-2" /> Dr. {doctor?.name || 'Médico'}</span>
+                          <div className="overflow-hidden flex-1">
+                            <h4 className="font-black text-slate-800 text-base lg:text-lg group-hover:text-blue-600 transition-colors truncate">{patient?.name || 'Paciente'}</h4>
+                            <div className="flex flex-wrap items-center gap-2 lg:gap-3 text-[9px] lg:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                              <span className="flex items-center bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm"><Users size={10} className="mr-1 lg:mr-2 text-blue-500" /> {appt.type}</span>
+                              <span className="flex items-center bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm"><MapPin size={10} className="mr-1 lg:mr-2 text-emerald-500" /> {appt.room}</span>
+                              <span className="flex items-center text-slate-500"><Stethoscope size={10} className="mr-1 lg:mr-2" /> Dr. {doctor?.name || 'Médico'}</span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row items-center gap-4 mt-6 sm:mt-0">
-                          <div className={`flex items-center px-4 py-2 rounded-2xl border ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}>
-                            <div className={`w-2 h-2 rounded-full ${statusConfig.color} mr-2 shadow-sm`}></div>
-                            <span className="text-[10px] font-black uppercase tracking-widest">{appt.status}</span>
+                        <div className="flex flex-row sm:flex-col lg:flex-row items-center justify-between sm:justify-center w-full sm:w-auto gap-3 lg:gap-4 mt-6 sm:mt-0">
+                          <div className={`flex items-center px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl lg:rounded-2xl border ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}>
+                            <div className={`w-1.5 lg:w-2 h-1.5 lg:h-2 rounded-full ${statusConfig.color} mr-2 shadow-sm`}></div>
+                            <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">{appt.status}</span>
                           </div>
                           <button 
                             onClick={() => startConsultation(appt.id)}
-                            className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
+                            className="bg-slate-900 text-white px-5 lg:px-6 py-2.5 lg:py-3 rounded-xl lg:rounded-2xl text-[9px] lg:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
                           >
                             Atender
                           </button>

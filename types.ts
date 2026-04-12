@@ -114,3 +114,14 @@ export interface Medication {
   purpose?: string;
   manufacturer?: string;
 }
+
+export interface EvolutionEntry {
+  id: string;
+  paciente_id: string;
+  medico_id: string;
+  medico_nome: string;
+  especialidade: string;
+  anotacoes: string;
+  senha_acesso: string; // Hash da senha para acesso sigiloso
+  data_criacao: string;
+}

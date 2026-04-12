@@ -25,7 +25,9 @@ import {
   RefreshCw,
   BarChart3,
   PieChart,
-  Pill
+  Pill,
+  Menu,
+  X
 } from 'lucide-react';
 import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus, Medication } from './types';
 import { storage, AppDatabase } from './services/storage';
@@ -51,6 +53,12 @@ const App: React.FC = () => {
   const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline'>('offline');
   const [isLoading, setIsLoading] = useState(false); 
   const [showLanding, setShowLanding] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    // Close sidebar on mobile when view changes
+    setIsSidebarOpen(false);
+  }, [currentView]);
 
   useEffect(() => {
     const syncInit = async () => {
@@ -114,46 +122,100 @@ const App: React.FC = () => {
     setCurrentView('consultation');
   };
 
-  const handleFinishConsultation = (evolutionData?: { diagnosis: string; conduct: string; complaint: string; prescription: string }) => {
+  const handleFinishConsultation = async (evolutionData?: { 
+    diagnosis: string; 
+    conduct: string; 
+    complaint: string; 
+    prescription: string;
+    especialidade?: string;
+    senha_acesso?: string;
+  }) => {
     if (activeAppointmentId && evolutionData && currentUser) {
-      setDb(prev => {
-        const appointment = prev.appointments.find(a => a.id === activeAppointmentId);
-        if (!appointment) return prev;
+      setIsLoading(true);
+      try {
+        console.log("Iniciando processo de finalização de consulta no App.tsx...");
+        const appointment = db.appointments.find(a => a.id === activeAppointmentId);
+        if (appointment) {
+          console.log("Atendimento encontrado:", appointment.id, "Paciente:", appointment.patientId);
+          
+          // 1. Salvar no Supabase (Cloud)
+          const evolutionPayload = {
+            paciente_id: appointment.patientId,
+            medico_id: currentUser.doctorId || currentUser.id,
+            medico_nome: currentUser.name,
+            especialidade: evolutionData.especialidade || (db.doctors.find(d => d.id === currentUser.doctorId)?.specialty || 'Clínica Geral'),
+            anotacoes: `QUEIXA/EVOLUÇÃO: ${evolutionData.complaint}\n` +
+                       (evolutionData.diagnosis ? `DIAGNÓSTICO (CID): ${evolutionData.diagnosis}\n` : '') +
+                       (evolutionData.conduct ? `CONDUTA/PROCEDIMENTOS: ${evolutionData.conduct}\n` : '') +
+                       (evolutionData.prescription ? `RECEITUÁRIO:\n${evolutionData.prescription}\n` : ''),
+            senha_acesso: evolutionData.senha_acesso || '',
+            data_criacao: new Date().toISOString()
+          };
 
-        const dateStr = new Date().toLocaleDateString('pt-BR');
-        const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        
-        const newEntry = `[DATA: ${dateStr} às ${timeStr}]\n` +
-                         `MÉDICO: ${currentUser.name}\n` +
-                         `QUEIXA/EVOLUÇÃO: ${evolutionData.complaint}\n` +
-                         (evolutionData.diagnosis ? `DIAGNÓSTICO (CID): ${evolutionData.diagnosis}\n` : '') +
-                         (evolutionData.conduct ? `CONDUTA/PROCEDIMENTOS: ${evolutionData.conduct}\n` : '') +
-                         (evolutionData.prescription ? `RECEITUÁRIO:\n${evolutionData.prescription}\n` : '') +
-                         `--------------------------------------------------\n\n`;
-        
-        const updatedPatients = (prev.patients || []).map(p => 
-          p.id === appointment.patientId 
-            ? { ...p, history: newEntry + (p.history || '') } 
-            : p
-        );
-        
-        const updatedAppointments = (prev.appointments || []).map(a => 
-          a.id === activeAppointmentId 
-            ? { ...a, status: AppointmentStatus.FINISHED } 
-            : a
-        );
+          console.log("Enviando evolução para o Supabase...");
+          const { error } = await storage.saveEvolutionToCloud(evolutionPayload);
 
-        return {
-          ...prev,
-          patients: updatedPatients,
-          appointments: updatedAppointments
-        };
-      });
-      alert("Atendimento e Receituário salvos no histórico com sucesso.");
+          if (error) {
+            console.error("Erro ao salvar evolução no Supabase:", error);
+            // Notificamos mas continuamos para salvar localmente
+          } else {
+            console.log("Evolução salva com sucesso no Supabase.");
+          }
+
+          // 2. Manter compatibilidade com histórico legado (Local)
+          const dateStr = new Date().toLocaleDateString('pt-BR');
+          const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          
+          const newEntry = `[DATA: ${dateStr} às ${timeStr}]\n` +
+                           `MÉDICO: ${currentUser.name}\n` +
+                           `QUEIXA/EVOLUÇÃO: ${evolutionData.complaint}\n` +
+                           (evolutionData.diagnosis ? `DIAGNÓSTICO (CID): ${evolutionData.diagnosis}\n` : '') +
+                           (evolutionData.conduct ? `CONDUTA/PROCEDIMENTOS: ${evolutionData.conduct}\n` : '') +
+                           (evolutionData.prescription ? `RECEITUÁRIO:\n${evolutionData.prescription}\n` : '') +
+                           `--------------------------------------------------\n\n`;
+          
+          console.log("Atualizando estado local do banco de dados...");
+          setDb(prev => {
+            const updatedPatients = (prev.patients || []).map(p => 
+              p.id === appointment.patientId 
+                ? { ...p, history: newEntry + (p.history || '') } 
+                : p
+            );
+            
+            const updatedAppointments = (prev.appointments || []).map(a => 
+              a.id === activeAppointmentId 
+                ? { ...a, status: AppointmentStatus.FINISHED } 
+                : a
+            );
+
+            return {
+              ...prev,
+              patients: updatedPatients,
+              appointments: updatedAppointments
+            };
+          });
+
+          console.log("Consulta finalizada com sucesso!");
+          alert("Atendimento finalizado e gravado com sucesso!");
+          
+          // Reset view after success
+          setActiveAppointmentId(null);
+          setCurrentView('agenda');
+        } else {
+          console.warn("Atendimento não encontrado para o ID:", activeAppointmentId);
+          alert("Erro: Atendimento não localizado.");
+        }
+      } catch (err) {
+        console.error("Erro crítico ao finalizar consulta:", err);
+        alert("Erro ao salvar atendimento. Verifique sua conexão e tente novamente.");
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      console.log("Finalização sem dados ou usuário (cancelamento/saída).");
+      setActiveAppointmentId(null);
+      setCurrentView('agenda');
     }
-    
-    setActiveAppointmentId(null);
-    setCurrentView('agenda');
   };
 
   const SidebarItem: React.FC<{ 
@@ -165,7 +227,10 @@ const App: React.FC = () => {
     if (adminOnly && currentUser.role !== UserRole.ADMIN) return null;
     return (
       <button
-        onClick={() => setCurrentView(view)}
+        onClick={() => {
+          setCurrentView(view);
+          setIsSidebarOpen(false);
+        }}
         className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
           currentView === view 
             ? 'bg-blue-600 text-white shadow-lg' 
@@ -181,9 +246,19 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 no-print">
-        <div className="p-6">
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans relative">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      <aside className={`fixed lg:static inset-y-0 left-0 w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 no-print z-50 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        <div className="p-6 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-inner">
               <ShieldCheck size={24} />
@@ -195,6 +270,12 @@ const App: React.FC = () => {
               </span>
             </div>
           </div>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden p-2 text-slate-400 hover:text-slate-600"
+          >
+            <X size={20} />
+          </button>
         </div>
 
         <nav className="flex-1 px-4 space-y-1 py-4 overflow-y-auto">
@@ -232,10 +313,16 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-30 no-print">
+      <main className="flex-1 flex flex-col overflow-hidden w-full">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shrink-0 z-30 no-print">
           <div className="flex items-center space-x-4 flex-1">
-            <div className="relative w-96 group">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <Menu size={24} />
+            </button>
+            <div className="relative w-full max-w-96 group hidden sm:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
                 type="text" 
@@ -245,8 +332,8 @@ const App: React.FC = () => {
             </div>
           </div>
           
-          <div className="flex items-center space-x-6">
-            <div className={`flex items-center space-x-2 px-4 py-2 rounded-full border shadow-inner transition-all ${cloudStatus === 'connected' ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+          <div className="flex items-center space-x-3 lg:space-x-6">
+            <div className={`flex items-center space-x-2 px-3 lg:px-4 py-1.5 lg:py-2 rounded-full border shadow-inner transition-all ${cloudStatus === 'connected' ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
               {isSyncing ? (
                 <RefreshCw size={14} className="text-blue-500 animate-spin" />
               ) : cloudStatus === 'connected' ? (
@@ -254,7 +341,7 @@ const App: React.FC = () => {
               ) : (
                 <CloudOff size={14} className="text-slate-400" />
               )}
-              <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${cloudStatus === 'connected' ? 'text-emerald-700' : 'text-slate-400'}`}>
+              <span className={`text-[10px] font-black uppercase tracking-[0.2em] hidden xs:inline-block ${cloudStatus === 'connected' ? 'text-emerald-700' : 'text-slate-400'}`}>
                 {isSyncing ? 'Salvando...' : cloudStatus === 'connected' ? 'Cloud Online' : 'Cloud Offline'}
               </span>
             </div>
@@ -265,7 +352,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 bg-slate-50/50">
           {currentView === 'dashboard' && <Dashboard patientsCount={filteredPatients.length} appointments={filteredAppointments} />}
           {currentView === 'agenda' && (
             <Agenda 
@@ -291,6 +378,7 @@ const App: React.FC = () => {
               })}
               doctors={db.doctors || []}
               isAdmin={currentUser.role === UserRole.ADMIN}
+              currentUser={currentUser}
             />
           )}
           {currentView === 'medications' && (
@@ -348,6 +436,11 @@ const App: React.FC = () => {
               patients={db.patients || []}
               doctors={db.doctors || []}
               medications={db.medications || []}
+              setMedications={(newM) => setDb(prev => {
+                const medicationsList = prev.medications || [];
+                const nextMedications = typeof newM === 'function' ? newM(medicationsList) : newM;
+                return { ...prev, medications: nextMedications };
+              })}
               onFinish={handleFinishConsultation}
             />
           )}

@@ -100,6 +100,10 @@ export const storage = {
     }
   },
 
+  saveEvolutionToCloud: async (evolution: any) => {
+    return await supabase.from('evolucao_paciente').insert([evolution]);
+  },
+
   exportBackup: () => {
     const data = localStorage.getItem(DB_KEY);
     if (!data) return;

@@ -36,19 +36,19 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
   const doctorsCount = MOCK_DOCTORS.length;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Painel de Controle</h1>
-          <p className="text-slate-500 mt-1">Resumo operacional da clínica para hoje.</p>
+          <h1 className="text-2xl lg:text-3xl font-black text-slate-800 tracking-tight">Painel de Controle</h1>
+          <p className="text-sm lg:text-base text-slate-500 mt-1 font-medium">Resumo operacional da clínica para hoje.</p>
         </div>
-        <div className="flex items-center space-x-2 text-sm bg-white border border-slate-200 px-4 py-2 rounded-full shadow-sm">
-          <Calendar size={16} className="text-blue-500" />
-          <span className="font-medium text-slate-600">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+        <div className="flex items-center space-x-2 text-[10px] lg:text-sm bg-white border border-slate-200 px-4 py-2 rounded-full shadow-sm self-start md:self-auto">
+          <Calendar size={14} lg:size={16} className="text-blue-500" />
+          <span className="font-black text-slate-600 uppercase tracking-widest">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <StatCard 
           icon={<Users className="text-blue-600" size={24} />}
           label="Total de Pacientes"
@@ -79,15 +79,15 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-8 rounded-[32px] shadow-sm border border-slate-200">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="lg:col-span-2 bg-white p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h3 className="text-lg font-bold text-slate-800">Fluxo Semanal</h3>
-              <p className="text-sm text-slate-500">Volume de pacientes atendidos</p>
+              <h3 className="text-lg font-black text-slate-800 tracking-tight">Fluxo Semanal</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Volume de pacientes atendidos</p>
             </div>
           </div>
-          <div className="h-72">
+          <div className="h-64 lg:h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data}>
                 <defs>
@@ -97,10 +97,11 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 900}} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 900}} />
                 <Tooltip 
-                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}}
+                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', padding: '12px'}}
+                  itemStyle={{fontWeight: 900, fontSize: '12px'}}
                 />
                 <Area type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
               </AreaChart>
@@ -108,8 +109,8 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200">
-          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center">
+        <div className="bg-white p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] shadow-sm border border-slate-200">
+          <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center tracking-tight">
             <AlertCircle size={20} className="mr-2 text-blue-600" />
             Alertas Críticos
           </h3>
@@ -136,7 +137,7 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
               bgColor="bg-emerald-50"
             />
           </div>
-          <button className="w-full mt-8 py-3 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-2xl transition-colors border border-dashed border-blue-200">
+          <button className="w-full mt-8 py-4 text-[10px] font-black text-blue-600 hover:bg-blue-50 rounded-2xl transition-colors border border-dashed border-blue-200 uppercase tracking-widest">
             Ver Central de Mensagens
           </button>
         </div>

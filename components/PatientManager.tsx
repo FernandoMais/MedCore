@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { 
   Search, 
   ChevronRight, 
+  ChevronLeft,
   FileText, 
   History, 
   AlertTriangle, 
@@ -24,16 +25,18 @@ import {
   FileDown,
   ExternalLink
 } from 'lucide-react';
-import { Patient, Gender, Doctor, MedicalFile } from '../types';
+import { Patient, Gender, Doctor, MedicalFile, User as AppUser } from '../types';
+import PatientEvolution from './PatientEvolution';
 
 interface PatientManagerProps {
   patients: Patient[];
   setPatients: React.Dispatch<React.SetStateAction<Patient[]>>;
   doctors: Doctor[];
   isAdmin: boolean;
+  currentUser: AppUser;
 }
 
-const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, doctors, isAdmin }) => {
+const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, doctors, isAdmin, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -194,17 +197,17 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Prontuário Médico Digital</h1>
-          <p className="text-slate-500 font-medium tracking-tight">Gestão de histórico clínico cronológico e exames.</p>
+          <h1 className="text-2xl lg:text-3xl font-black text-slate-800 tracking-tight">Prontuário Médico Digital</h1>
+          <p className="text-sm lg:text-base text-slate-500 font-medium tracking-tight">Gestão de histórico clínico cronológico e exames.</p>
         </div>
-        <div className="flex items-center space-x-3">
-          <button onClick={() => window.open('https://prescricao.cfm.org.br/login', '_blank')} className="bg-emerald-600 text-white px-6 py-3.5 rounded-2xl font-black text-xs shadow-xl hover:bg-emerald-700 flex items-center space-x-2 transition-all active:scale-95"><ShieldCheck size={18} /><span>RECEITAS ONLINE</span></button>
-          <button onClick={() => { setFormData({ name: '', birthDate: '', gender: Gender.MALE, cpf: '', email: '', phone: '', address: '', healthInsurance: '', bloodType: '', allergies: '', preExistingConditions: '', history: '', primaryDoctorId: doctors[0]?.id || '' }); setShowAddModal(true); }} className="bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black text-xs shadow-xl hover:bg-blue-700 flex items-center space-x-2 transition-all active:scale-95"><Plus size={20} /><span>NOVO PACIENTE</span></button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <button onClick={() => window.open('https://prescricao.cfm.org.br/login', '_blank')} className="bg-emerald-600 text-white px-6 py-3.5 rounded-2xl font-black text-xs shadow-xl hover:bg-emerald-700 flex items-center justify-center space-x-2 transition-all active:scale-95"><ShieldCheck size={18} /><span>RECEITAS ONLINE</span></button>
+          <button onClick={() => { setFormData({ name: '', birthDate: '', gender: Gender.MALE, cpf: '', email: '', phone: '', address: '', healthInsurance: '', bloodType: '', allergies: '', preExistingConditions: '', history: '', primaryDoctorId: doctors[0]?.id || '' }); setShowAddModal(true); }} className="bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black text-xs shadow-xl hover:bg-blue-700 flex items-center justify-center space-x-2 transition-all active:scale-95"><Plus size={20} /><span>NOVO PACIENTE</span></button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
-        <div className={`space-y-4 transition-all duration-300 no-print ${selectedPatient ? 'lg:col-span-4' : 'lg:col-span-12'}`}>
+        <div className={`space-y-4 transition-all duration-300 no-print ${selectedPatient ? 'hidden lg:block lg:col-span-4' : 'lg:col-span-12'}`}>
           <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -217,28 +220,46 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
         {selectedPatient && (
           <div className="lg:col-span-8 printable-document animate-in slide-in-from-right-8 duration-500">
             <div className="print-only mb-10 border-b-2 border-slate-900 pb-6"><div className="flex justify-between items-center"><div><h1 className="text-2xl font-black text-slate-900">MEDCORE PRO - SISTEMA CLÍNICO</h1><p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Relatório de Prontuário Eletrônico</p></div><div className="text-right"><p className="text-xs font-black">Data da Exportação: {new Date().toLocaleDateString('pt-BR')}</p><p className="text-xs font-medium">Unidade: Clínica de Especialidades</p></div></div></div>
-            <div className="bg-white border border-slate-200 rounded-[40px] shadow-2xl overflow-hidden flex flex-col h-full">
-              <div className="p-10 border-b border-slate-100 bg-slate-50/30">
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
-                  <div className="flex items-center space-x-6">
-                    <div className={`w-24 h-24 rounded-[32px] flex items-center justify-center text-4xl font-black text-white shadow-xl ${selectedPatient.allergies.length > 0 ? 'bg-red-600' : 'bg-blue-600'}`}>{selectedPatient.name.charAt(0)}</div>
-                    <div><h2 className="text-3xl font-black text-slate-900 tracking-tighter">{selectedPatient.name}</h2><p className="text-sm font-bold text-slate-500 mt-1 uppercase tracking-widest">NASC: {new Date(selectedPatient.birthDate).toLocaleDateString('pt-BR')} • CPF: {selectedPatient.cpf}</p></div>
+            <div className="bg-white border border-slate-200 rounded-[30px] lg:rounded-[40px] shadow-2xl overflow-hidden flex flex-col h-full">
+              <div className="p-6 lg:p-10 border-b border-slate-100 bg-slate-50/30">
+                <div className="flex flex-col justify-between items-start gap-6">
+                  <div className="flex items-center space-x-4 lg:space-x-6 w-full">
+                    <button 
+                      onClick={() => setSelectedPatientId(null)} 
+                      className="lg:hidden p-3 bg-slate-100 text-slate-500 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <div className={`w-16 h-16 lg:w-24 lg:h-24 rounded-2xl lg:rounded-[32px] flex items-center justify-center text-2xl lg:text-4xl font-black text-white shadow-xl shrink-0 ${selectedPatient.allergies.length > 0 ? 'bg-red-600' : 'bg-blue-600'}`}>{selectedPatient.name.charAt(0)}</div>
+                    <div className="overflow-hidden"><h2 className="text-xl lg:text-3xl font-black text-slate-900 tracking-tighter truncate">{selectedPatient.name}</h2><p className="text-[10px] lg:text-sm font-bold text-slate-500 mt-1 uppercase tracking-widest">NASC: {new Date(selectedPatient.birthDate).toLocaleDateString('pt-BR')} • CPF: {selectedPatient.cpf}</p></div>
                   </div>
-                  <div className="flex items-center space-x-3 no-print">
-                    <button onClick={handleSavePDF} className="flex items-center space-x-3 px-6 py-3.5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black shadow-xl transition-all active:scale-95"><FileDown size={18} /><span>SALVAR PRONTUÁRIO (PDF)</span></button>
-                    <button onClick={startEdit} className="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 text-blue-600 shadow-sm transition-all active:scale-95"><Edit3 size={20} /></button>
-                    <button onClick={() => setSelectedPatientId(null)} className="p-4 bg-slate-100 text-slate-500 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"><X size={20} /></button>
+                  <div className="flex flex-wrap items-center gap-3 no-print w-full">
+                    <button onClick={handleSavePDF} className="flex-1 lg:flex-none flex items-center justify-center space-x-3 px-6 py-3.5 bg-slate-900 text-white rounded-2xl font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-black shadow-xl transition-all active:scale-95"><FileDown size={18} /><span>SALVAR PDF</span></button>
+                    <button onClick={startEdit} className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-6 py-3.5 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 text-blue-600 shadow-sm transition-all active:scale-95"><Edit3 size={18} /> <span className="lg:hidden text-[10px] font-black uppercase tracking-widest">EDITAR</span></button>
+                    <button onClick={() => setSelectedPatientId(null)} className="hidden lg:block p-4 bg-slate-100 text-slate-500 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"><X size={20} /></button>
                   </div>
                 </div>
               </div>
 
-              <div className="flex-1 p-10 space-y-10 overflow-y-auto">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="bg-red-50 p-8 rounded-[32px] border border-red-100 print-alert"><h3 className="text-xs font-black text-red-600 uppercase tracking-widest mb-4 flex items-center"><AlertTriangle size={16} className="mr-2" /> Alertas de Segurança & Alergias</h3><div className="flex flex-wrap gap-2">{selectedPatient.allergies.length > 0 ? (selectedPatient.allergies.map(a => <span key={a} className="bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase">{a}</span>)) : <p className="text-xs text-red-400 font-bold italic">Nenhuma alergia relatada pelo paciente.</p>}</div></div>
-                  <div className="bg-slate-50 p-8 rounded-[32px] border border-slate-100 print-alert"><h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center"><History size={16} className="mr-2 text-blue-500" /> Condições Pré-existentes</h3><div className="flex flex-wrap gap-2">{selectedPatient.preExistingConditions.length > 0 ? (selectedPatient.preExistingConditions.map(c => <span key={c} className="bg-white border border-slate-200 text-slate-700 text-[10px] font-bold px-3 py-1 rounded-lg uppercase">{c}</span>)) : <p className="text-xs text-slate-400 font-bold italic">Sem registros prévios no sistema.</p>}</div></div>
+              <div className="flex-1 p-6 lg:p-10 space-y-8 lg:space-y-10 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+                  <div className="bg-red-50 p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] border border-red-100 print-alert"><h3 className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-4 flex items-center"><AlertTriangle size={14} className="mr-2" /> Alertas de Segurança & Alergias</h3><div className="flex flex-wrap gap-2">{selectedPatient.allergies.length > 0 ? (selectedPatient.allergies.map((a, idx) => <span key={`${a}-${idx}`} className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-lg uppercase">{a}</span>)) : <p className="text-[10px] text-red-400 font-bold italic">Nenhuma alergia relatada pelo paciente.</p>}</div></div>
+                  <div className="bg-slate-50 p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] border border-slate-100 print-alert"><h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center"><History size={14} className="mr-2 text-blue-500" /> Condições Pré-existentes</h3><div className="flex flex-wrap gap-2">{selectedPatient.preExistingConditions.length > 0 ? (selectedPatient.preExistingConditions.map((c, idx) => <span key={`${c}-${idx}`} className="bg-white border border-slate-200 text-slate-700 text-[9px] font-bold px-3 py-1 rounded-lg uppercase">{c}</span>)) : <p className="text-[10px] text-slate-400 font-bold italic">Sem registros prévios no sistema.</p>}</div></div>
                 </div>
 
-                <div className="space-y-6"><h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center px-2"><FileText size={18} className="mr-3 text-blue-600" /> Evoluções Clínicas Fracionadas por Data</h3><div className="history-content bg-slate-50/30 p-4 rounded-[40px] border border-slate-100">{renderFormattedHistory(selectedPatient.history)}</div></div>
+                <div className="space-y-6">
+                  <PatientEvolution patientId={selectedPatient.id} currentUser={currentUser} />
+                </div>
+
+                <div className="space-y-6 pt-8 border-t border-slate-100">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center px-2">
+                    <History size={18} className="mr-3 text-blue-600" /> 
+                    Histórico de Texto (Legado)
+                  </h3>
+                  <div className="history-content bg-slate-50/30 p-4 rounded-[40px] border border-slate-100">
+                    {renderFormattedHistory(selectedPatient.history)}
+                  </div>
+                </div>
 
                 <div className="space-y-6 no-print pt-8 border-t border-slate-100">
                   <div className="flex items-center justify-between"><h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center"><FileText size={18} className="mr-3 text-emerald-600" /> Central de Documentos & Laudos Digitais</h3><label className="flex items-center space-x-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl text-xs font-black cursor-pointer hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all active:scale-95"><Upload size={18} /><span>ANEXAR DOCUMENTO</span><input type="file" onChange={handleFileUpload} className="hidden" /></label></div>

@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 
 // Strictly following initialization guidelines
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -10,7 +10,7 @@ export const getICDRecommendation = async (symptoms: string) => {
       model: "gemini-3-flash-preview",
       contents: `Com base nos seguintes sintomas: "${symptoms}", sugira os códigos CID-10 e diagnósticos prováveis mais relevantes. Responda em formato de lista simples.`,
       config: {
-        thinkingConfig: { thinkingBudget: 0 }
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
       }
     });
     return response.text;
@@ -26,7 +26,7 @@ export const summarizePatientHistory = async (patientName: string, history: stri
       model: "gemini-3-flash-preview",
       contents: `Resuma o histórico médico do paciente ${patientName} de forma concisa para um médico ler em segundos: ${history}`,
       config: {
-        thinkingConfig: { thinkingBudget: 0 }
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
       }
     });
     return response.text;

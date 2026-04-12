@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 10mm;
+    size: a4;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  aside, header, nav, button, .no-print, #sidebar, .tabs-navigation, .alert-banner, .no-print-area {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    display: block !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+  .prescription-print-content, .exam-print-content {
+    display: none !important;
+  }
+  body.printing-prescription .prescription-print-content,
+  body.printing-exam .exam-print-content {
+    display: block !important;
+    padding: 15mm;
+    border: none;
+    width: 100%;
+    margin: 0;
+    background: white !important;
+    position: relative;
+  }
+  body.printing-prescription #root,
+  body.printing-exam #root {
+    display: none !important;
+  }
+  .prescription-header {
+    text-align: center;
+    border-bottom: 2pt solid #2563eb;
+    margin-bottom: 20pt;
+    padding-bottom: 15pt;
+  }
+  .prescription-body {
+    font-size: 13pt;
+    line-height: 1.8;
+    margin-bottom: 40pt;
+    min-height: 150mm;
+    color: #1e293b !important;
+  }
+  .prescription-footer {
+    text-align: center;
+    margin-top: 30pt;
+    border-top: 1pt solid #cbd5e1;
+    padding-top: 15pt;
+  }
+  .signature-line {
+    width: 80mm;
+    border-top: 1.5pt solid black !important;
+    margin: 30pt auto 8pt auto;
+  }
+  .history-content {
+    page-break-inside: auto;
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+  }
+  h1, h2, h3 {
+    color: black !important;
+    page-break-after: avoid;
+  }
+}
