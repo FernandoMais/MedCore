@@ -29,3 +29,7 @@ MedCore Pro is a React + Vite clinical management web app. It includes patient, 
 - Sensitive consultation specialties such as Psicologia and Psiquiatria require an access password before finalization; the stored value is SHA-256 hashed.
 - Backup export receives the current in-memory database state so recent unsynced edits are included.
 - Every successful login resets the app to the Dashboard view and clears any previously active consultation/page state.
+- Three user roles (`UserRole`): `ADMIN` (full access, manages users/passwords, reports, doctors, backups), `DOCTOR` (own patients/agenda + atendimento/prontuário), `COLLABORATOR` (vê toda a clínica para editar pacientes/agenda/medicamentos, mas sem atender consultas, sem corpo clínico, sem relatórios e sem backup).
+- O cadastro de profissional/usuário no `DoctorRegistry` permite escolher entre os 3 papéis. Para Médico exige CRM e Especialidade; para Colaborador/Administrador esses campos ficam ocultos e só é criado o usuário (sem registro de médico).
+- O `DoctorRegistry` inclui um painel "Usuários do Sistema" onde o admin pode trocar a senha, alterar o papel e remover qualquer usuário (o usuário `admin` não pode ser removido).
+- Na Agenda, o botão "Atender" só aparece para perfis Médico e Admin.

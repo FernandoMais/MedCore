@@ -123,12 +123,14 @@ const App: React.FC = () => {
     return <Login users={db.users || []} onLogin={handleLogin} />;
   }
 
-  const filteredPatients = (db.patients || []).filter(p => 
-    currentUser.role === UserRole.ADMIN || p.primaryDoctorId === currentUser.doctorId
+  const seesAllRecords = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.COLLABORATOR;
+
+  const filteredPatients = (db.patients || []).filter(p =>
+    seesAllRecords || p.primaryDoctorId === currentUser.doctorId
   );
 
-  const filteredAppointments = (db.appointments || []).filter(a => 
-    currentUser.role === UserRole.ADMIN || a.doctorId === currentUser.doctorId
+  const filteredAppointments = (db.appointments || []).filter(a =>
+    seesAllRecords || a.doctorId === currentUser.doctorId
   );
 
   const startConsultation = (appointmentId: string) => {
@@ -237,8 +239,10 @@ const App: React.FC = () => {
     icon: React.ReactNode; 
     label: string;
     adminOnly?: boolean;
-  }> = ({ view, icon, label, adminOnly }) => {
+    allowedRoles?: UserRole[];
+  }> = ({ view, icon, label, adminOnly, allowedRoles }) => {
     if (adminOnly && currentUser.role !== UserRole.ADMIN) return null;
+    if (allowedRoles && !allowedRoles.includes(currentUser.role)) return null;
     return (
       <button
         onClick={() => {
@@ -280,7 +284,11 @@ const App: React.FC = () => {
             <div>
               <h1 className="text-xl font-black tracking-tighter text-slate-800 leading-none">MedCore</h1>
               <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">
-                {currentUser.role === UserRole.ADMIN ? 'ADMIN PANEL' : 'DOCTOR PORTAL'}
+                {currentUser.role === UserRole.ADMIN
+                  ? 'ADMIN PANEL'
+                  : currentUser.role === UserRole.COLLABORATOR
+                    ? 'COLLABORATOR PORTAL'
+                    : 'DOCTOR PORTAL'}
               </span>
             </div>
           </div>
@@ -310,7 +318,11 @@ const App: React.FC = () => {
             <div className="flex-1 overflow-hidden">
               <p className="text-xs font-bold truncate text-slate-800">{currentUser.name}</p>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-                {currentUser.role === UserRole.ADMIN ? 'ADMIN' : 'MÉDICO'}
+                {currentUser.role === UserRole.ADMIN
+                  ? 'ADMIN'
+                  : currentUser.role === UserRole.COLLABORATOR
+                    ? 'COLABORADOR'
+                    : 'MÉDICO'}
               </p>
             </div>
           </div>

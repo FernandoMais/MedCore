@@ -402,12 +402,14 @@ const Agenda: React.FC<AgendaProps> = ({
                                 )}
                               </div>
                             )}
-                            <button 
-                            onClick={() => handleStartConsultation(appt.id)}
-                            className="bg-slate-900 text-white px-5 lg:px-6 py-2.5 lg:py-3 rounded-xl lg:rounded-2xl text-[9px] lg:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
-                          >
-                            Atender
-                          </button>
+                            {(currentUser.role === UserRole.DOCTOR || currentUser.role === UserRole.ADMIN) && (
+                              <button
+                                onClick={() => handleStartConsultation(appt.id)}
+                                className="bg-slate-900 text-white px-5 lg:px-6 py-2.5 lg:py-3 rounded-xl lg:rounded-2xl text-[9px] lg:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
+                              >
+                                Atender
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

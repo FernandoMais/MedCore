@@ -75,22 +75,31 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
       return;
     }
 
-    const doctorId = createId('doctor');
-    
-    // Create Doctor Record
-    const newDoctor: Doctor = {
-      id: doctorId,
-      name: formData.name,
-      crm: formData.crm,
-      specialty: formData.specialty,
-      email: formData.email,
-      phone: formData.phone,
-      availableTimes: [
-        { dayOfWeek: 'Segunda', startTime: '08:00', endTime: '18:00' }
-      ]
-    };
+    const isDoctor = formData.role === UserRole.DOCTOR;
 
-    // Create User Record
+    if (isDoctor && (!formData.crm.trim() || !formData.specialty.trim())) {
+      alert('CRM e Especialidade são obrigatórios para o perfil Médico.');
+      return;
+    }
+
+    let doctorId: string | undefined = undefined;
+
+    if (isDoctor) {
+      doctorId = createId('doctor');
+      const newDoctor: Doctor = {
+        id: doctorId,
+        name: formData.name,
+        crm: formData.crm,
+        specialty: formData.specialty,
+        email: formData.email,
+        phone: formData.phone,
+        availableTimes: [
+          { dayOfWeek: 'Segunda', startTime: '08:00', endTime: '18:00' }
+        ]
+      };
+      setDoctors(prev => [newDoctor, ...prev]);
+    }
+
     const newUser: User = {
       id: createId('user'),
       username: formData.username.trim(),
@@ -100,16 +109,52 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
       doctorId: doctorId
     };
 
-    setDoctors(prev => [newDoctor, ...prev]);
     setUsers(prev => [newUser, ...prev]);
-    
+
     setShowAddModal(false);
-    setFormData({ 
-      name: '', crm: '', specialty: '', email: '', phone: '', 
-      username: '', password: '', role: UserRole.DOCTOR 
+    setFormData({
+      name: '', crm: '', specialty: '', email: '', phone: '',
+      username: '', password: '', role: UserRole.DOCTOR
     });
-    alert('Profissional e usuário de acesso criados com sucesso!');
+    alert(isDoctor
+      ? 'Profissional e usuário de acesso criados com sucesso!'
+      : 'Usuário de acesso criado com sucesso!');
   };
+
+  // ========== USER MANAGEMENT (admin password reset) ==========
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [userDraft, setUserDraft] = useState<{ password: string; role: UserRole; name: string }>({
+    password: '', role: UserRole.DOCTOR, name: ''
+  });
+
+  const beginEditUser = (u: User) => {
+    setEditingUserId(u.id);
+    setUserDraft({ password: u.password, role: u.role, name: u.name });
+  };
+
+  const saveUserEdit = () => {
+    if (!editingUserId) return;
+    if (!userDraft.password.trim()) {
+      alert('A senha não pode ficar em branco.');
+      return;
+    }
+    setUsers(prev => prev.map(u => u.id === editingUserId
+      ? { ...u, password: userDraft.password, role: userDraft.role, name: userDraft.name || u.name }
+      : u
+    ));
+    setEditingUserId(null);
+    alert('Credenciais do usuário atualizadas.');
+  };
+
+  const deleteUser = (u: User) => {
+    if (u.username === 'admin') {
+      alert('O usuário "admin" não pode ser removido.');
+      return;
+    }
+    if (!confirm(`Remover o usuário "${u.username}"?`)) return;
+    setUsers(prev => prev.filter(x => x.id !== u.id));
+  };
+  // ============================================================
 
   const startEditing = () => {
     if (selectedDoctor) {
@@ -173,6 +218,102 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
           <UserPlus size={18} />
           <span>CADASTRAR PROFISSIONAL</span>
         </button>
+      </div>
+
+      {/* ===== Painel de Gestão de Usuários do Sistema ===== */}
+      <div className="bg-white border border-slate-200 rounded-[32px] shadow-sm overflow-hidden">
+        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center space-x-3">
+            <Key className="text-blue-600" size={20} />
+            <div>
+              <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Usuários do Sistema</h2>
+              <p className="text-xs text-slate-500 font-medium">Gerencie senhas, papéis e remoção de qualquer usuário.</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{users.length} usuário(s)</span>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {users.map(u => {
+            const editing = editingUserId === u.id;
+            const roleBadge =
+              u.role === UserRole.ADMIN ? { label: 'ADMIN', cls: 'bg-rose-50 text-rose-600 border-rose-100' } :
+              u.role === UserRole.COLLABORATOR ? { label: 'COLABORADOR', cls: 'bg-amber-50 text-amber-700 border-amber-100' } :
+              { label: 'MÉDICO', cls: 'bg-blue-50 text-blue-700 border-blue-100' };
+            return (
+              <div key={u.id} className="p-5 flex flex-col md:flex-row md:items-center gap-4">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center font-black text-xs shrink-0">
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-black text-slate-800 text-sm truncate">{u.name}</p>
+                    <p className="text-[11px] text-slate-400 font-bold truncate">@{u.username}</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${roleBadge.cls}`}>
+                    {roleBadge.label}
+                  </span>
+                </div>
+
+                {editing ? (
+                  <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 flex-1">
+                    <input
+                      type="text"
+                      placeholder="Nome"
+                      value={userDraft.name}
+                      onChange={e => setUserDraft({ ...userDraft, name: e.target.value })}
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Nova senha"
+                      value={userDraft.password}
+                      onChange={e => setUserDraft({ ...userDraft, password: e.target.value })}
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <select
+                      value={userDraft.role}
+                      onChange={e => setUserDraft({ ...userDraft, role: e.target.value as UserRole })}
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={UserRole.DOCTOR}>Médico</option>
+                      <option value={UserRole.COLLABORATOR}>Colaborador</option>
+                      <option value={UserRole.ADMIN}>Administrador</option>
+                    </select>
+                    <button
+                      onClick={saveUserEdit}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center space-x-1"
+                    >
+                      <Save size={14} /><span>Salvar</span>
+                    </button>
+                    <button
+                      onClick={() => setEditingUserId(null)}
+                      className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => beginEditUser(u)}
+                      className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all flex items-center space-x-1"
+                    >
+                      <Key size={14} /><span>Alterar Senha / Papel</span>
+                    </button>
+                    <button
+                      onClick={() => deleteUser(u)}
+                      disabled={u.username === 'admin'}
+                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                      title={u.username === 'admin' ? 'O admin não pode ser removido' : 'Remover usuário'}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -386,6 +527,7 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
                               onChange={e => setEditUserFormData({...editUserFormData, role: e.target.value as UserRole})}
                             >
                               <option value={UserRole.DOCTOR}>MÉDICO</option>
+                              <option value={UserRole.COLLABORATOR}>COLABORADOR</option>
                               <option value={UserRole.ADMIN}>ADMINISTRADOR</option>
                             </select>
                           </div>
@@ -548,10 +690,12 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
                   <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Dados Profissionais</h3>
                 </div>
                 <FormInput label="Nome Completo" value={formData.name} onChange={v => setFormData({...formData, name: v})} required />
-                <div className="grid grid-cols-2 gap-6">
-                  <FormInput label="CRM Profissional" placeholder="000000/UF" value={formData.crm} onChange={v => setFormData({...formData, crm: v})} required />
-                  <FormInput label="Especialidade" placeholder="Ex: Cardiologia" value={formData.specialty} onChange={v => setFormData({...formData, specialty: v})} required />
-                </div>
+                {formData.role === UserRole.DOCTOR && (
+                  <div className="grid grid-cols-2 gap-6">
+                    <FormInput label="CRM Profissional" placeholder="000000/UF" value={formData.crm} onChange={v => setFormData({...formData, crm: v})} required />
+                    <FormInput label="Especialidade" placeholder="Ex: Cardiologia" value={formData.specialty} onChange={v => setFormData({...formData, specialty: v})} required />
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-6">
                   <FormInput label="E-mail Corporativo" type="email" value={formData.email} onChange={v => setFormData({...formData, email: v})} required />
                   <FormInput label="Telefone / Celular" placeholder="(00) 00000-0000" value={formData.phone} onChange={v => setFormData({...formData, phone: v})} required />
@@ -567,24 +711,37 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
                 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Perfil de Acesso (Papel) *</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button 
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
                       type="button"
                       onClick={() => setFormData({...formData, role: UserRole.DOCTOR})}
-                      className={`p-4 rounded-2xl border-2 transition-all flex items-center justify-center space-x-3 ${formData.role === UserRole.DOCTOR ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-lg' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}
+                      className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center space-y-2 ${formData.role === UserRole.DOCTOR ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-lg' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}
                     >
                       <Stethoscope size={20} />
-                      <span className="font-black text-xs uppercase tracking-widest">Usuário Médico</span>
+                      <span className="font-black text-[10px] uppercase tracking-widest">Médico</span>
                     </button>
-                    <button 
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, role: UserRole.COLLABORATOR})}
+                      className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center space-y-2 ${formData.role === UserRole.COLLABORATOR ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-lg' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}
+                    >
+                      <UserIcon size={20} />
+                      <span className="font-black text-[10px] uppercase tracking-widest">Colaborador</span>
+                    </button>
+                    <button
                       type="button"
                       onClick={() => setFormData({...formData, role: UserRole.ADMIN})}
-                      className={`p-4 rounded-2xl border-2 transition-all flex items-center justify-center space-x-3 ${formData.role === UserRole.ADMIN ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-lg' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}
+                      className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center space-y-2 ${formData.role === UserRole.ADMIN ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-lg' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}
                     >
                       <Shield size={20} />
-                      <span className="font-black text-xs uppercase tracking-widest">Administrativo</span>
+                      <span className="font-black text-[10px] uppercase tracking-widest">Administrador</span>
                     </button>
                   </div>
+                  <p className="text-[10px] text-slate-400 mt-2 px-1">
+                    {formData.role === UserRole.DOCTOR && 'Acesso: pacientes/agenda próprios + atendimento e prontuário.'}
+                    {formData.role === UserRole.COLLABORATOR && 'Acesso: agenda, pacientes e medicamentos de toda a clínica (sem atender consultas).'}
+                    {formData.role === UserRole.ADMIN && 'Acesso irrestrito ao sistema, relatórios, equipe e backups.'}
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
