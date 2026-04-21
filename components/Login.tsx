@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, User as UserIcon, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Lock, User as UserIcon, AlertCircle, Loader2 } from 'lucide-react';
 import { User } from '../types';
+import { loginUser } from '../services/auth';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -12,14 +13,23 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = users.find(u => u.username === username && u.password === password);
-    if (user) {
-      onLogin(user);
-    } else {
-      setError('Credenciais inválidas. Verifique usuário e senha.');
+    setError('');
+    setLoading(true);
+    try {
+      const result = await loginUser(username, password, users);
+      if (result.ok) {
+        onLogin(result.user);
+      } else {
+        setError(result.error);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Falha inesperada ao entrar.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -71,11 +81,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
               </div>
             </div>
 
-            <button 
+            <button
               type="submit"
-              className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all"
+              disabled={loading}
+              className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-wait"
             >
-              Acessar Plataforma
+              {loading && <Loader2 size={16} className="animate-spin" />}
+              <span>{loading ? 'Autenticando...' : 'Acessar Plataforma'}</span>
             </button>
           </form>
 

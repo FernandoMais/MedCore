@@ -25,6 +25,7 @@ import {
   Key
 } from 'lucide-react';
 import { Doctor, DoctorSchedule, User, UserRole } from '../types';
+import { provisionAuthAccount } from '../services/auth';
 
 interface DoctorRegistryProps {
   doctors: Doctor[];
@@ -110,6 +111,9 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
     };
 
     setUsers(prev => [newUser, ...prev]);
+
+    // Provisiona conta no Supabase Auth em background (não bloqueia o cadastro local).
+    provisionAuthAccount(newUser.username, newUser.password).catch(() => {});
 
     setShowAddModal(false);
     setFormData({

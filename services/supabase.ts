@@ -34,6 +34,10 @@ function createStub() {
     from: () => builder,
     auth: {
       getUser: () => Promise.resolve({ data: { user: null }, error }),
+      signInWithPassword: () => Promise.resolve({ data: null, error }),
+      signUp: () => Promise.resolve({ data: null, error }),
+      signOut: () => Promise.resolve({ error: null }),
+      updateUser: () => Promise.resolve({ data: null, error }),
     },
   };
 }

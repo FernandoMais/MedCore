@@ -33,3 +33,8 @@ MedCore Pro is a React + Vite clinical management web app. It includes patient, 
 - O cadastro de profissional/usuário no `DoctorRegistry` permite escolher entre os 3 papéis. Para Médico exige CRM e Especialidade; para Colaborador/Administrador esses campos ficam ocultos e só é criado o usuário (sem registro de médico).
 - O `DoctorRegistry` inclui um painel "Usuários do Sistema" onde o admin pode trocar a senha, alterar o papel e remover qualquer usuário (o usuário `admin` não pode ser removido).
 - Na Agenda, o botão "Atender" só aparece para perfis Médico e Admin.
+- Login usa Supabase Auth via `services/auth.ts`: valida o usuário/senha contra a tabela local (fonte de verdade dos perfis e papéis) e em seguida estabelece sessão real no Supabase com `signInWithPassword` usando e-mail sintético `username@medcore.local`. Se o usuário ainda não existir no Auth, faz `signUp` automático na primeira entrada.
+- Logout chama `supabase.auth.signOut()` para encerrar a sessão.
+- Cadastro de novo usuário no `DoctorRegistry` provisiona conta no Supabase Auth em background (`provisionAuthAccount`).
+- `fetchFromCloud` nunca sobrescreve dados locais com arrays vazios da nuvem (corrige bug que apagava o admin quando a tabela `users` estava vazia). `initLocal` também garante que o usuário `admin` sempre exista.
+- Limitação: a chave anon não permite ao admin redefinir a senha de outros usuários no Supabase Auth (precisaria de service_role em uma Edge Function). O painel "Usuários do Sistema" troca a senha **local**; o usuário deve usar a função "esqueci minha senha" do Supabase para sincronizar a senha do Auth.

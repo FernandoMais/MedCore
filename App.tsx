@@ -98,6 +98,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    import('./services/auth').then(m => m.logoutUser()).catch(() => {});
     setCurrentUser(null);
     setCurrentView('dashboard');
     setActiveAppointmentId(null);

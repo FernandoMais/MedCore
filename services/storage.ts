@@ -37,8 +37,14 @@ export const storage = {
       const saved = localStorage.getItem(DB_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
+        const users = Array.isArray(parsed.users) && parsed.users.length > 0
+          ? parsed.users
+          : DEFAULT_DB.users;
+        // Garante que o usuário admin sempre exista (proteção contra wipe acidental)
+        const hasAdmin = users.some((u: User) => u.username === 'admin');
+        const finalUsers = hasAdmin ? users : [...DEFAULT_DB.users.filter(u => u.username === 'admin'), ...users];
         return {
-          users: Array.isArray(parsed.users) ? parsed.users : DEFAULT_DB.users,
+          users: finalUsers,
           patients: Array.isArray(parsed.patients) ? parsed.patients : DEFAULT_DB.patients,
           doctors: Array.isArray(parsed.doctors) ? parsed.doctors : DEFAULT_DB.doctors,
           appointments: Array.isArray(parsed.appointments) ? parsed.appointments : DEFAULT_DB.appointments,
@@ -56,21 +62,20 @@ export const storage = {
   fetchFromCloud: async (): Promise<Partial<AppDatabase>> => {
     try {
       const cloudData: Partial<AppDatabase> = {};
-      
-      const patientsRes = await supabase.from('patients').select('*');
-      if (!patientsRes.error) cloudData.patients = patientsRes.data;
+      // Importante: nunca sobrescrever dados locais com array vazio da nuvem.
+      // Caso a tabela ainda esteja vazia, mantemos o que temos local e o syncToCloud
+      // posterior é quem vai populá-la.
+      const assignIfNonEmpty = <K extends keyof AppDatabase>(key: K, res: any) => {
+        if (!res.error && Array.isArray(res.data) && res.data.length > 0) {
+          (cloudData as any)[key] = res.data;
+        }
+      };
 
-      const doctorsRes = await supabase.from('doctors').select('*');
-      if (!doctorsRes.error) cloudData.doctors = doctorsRes.data;
-
-      const appointmentsRes = await supabase.from('appointments').select('*');
-      if (!appointmentsRes.error) cloudData.appointments = appointmentsRes.data;
-
-      const usersRes = await supabase.from('users').select('*');
-      if (!usersRes.error) cloudData.users = usersRes.data;
-
-      const medicationsRes = await supabase.from('medications').select('*');
-      if (!medicationsRes.error) cloudData.medications = medicationsRes.data;
+      assignIfNonEmpty('patients', await supabase.from('patients').select('*'));
+      assignIfNonEmpty('doctors', await supabase.from('doctors').select('*'));
+      assignIfNonEmpty('appointments', await supabase.from('appointments').select('*'));
+      assignIfNonEmpty('users', await supabase.from('users').select('*'));
+      assignIfNonEmpty('medications', await supabase.from('medications').select('*'));
 
       return cloudData;
     } catch (e) {
