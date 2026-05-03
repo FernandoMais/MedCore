@@ -2,7 +2,8 @@
 export enum UserRole {
   ADMIN = 'admin',
   DOCTOR = 'doctor',
-  COLLABORATOR = 'collaborator'
+  COLLABORATOR = 'collaborator',
+  PATIENT = 'patient'
 }
 
 export interface User {
@@ -82,6 +83,8 @@ export interface Patient {
   paymentValue?: string;
   paymentSender?: string;
   selfRegistered?: boolean;
+  patientPassword?: string;
+  patientPasswordSet?: boolean;
 }
 
 export interface Appointment {

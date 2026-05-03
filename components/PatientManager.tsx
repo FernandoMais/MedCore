@@ -1,31 +1,27 @@
 import React, { useState } from 'react';
 import { 
   Search, 
-  ChevronRight, 
-  ChevronLeft,
   FileText, 
-  History, 
-  AlertTriangle, 
   X, 
-  Edit3, 
-  Upload, 
-  Download, 
+  Edit3,
+  Upload,
+  Download,
   FileIcon, 
   Plus, 
   Trash2, 
-  Eye, 
-  ShieldCheck, 
+  Eye,
   Save,
   User as UserIcon,
-  RefreshCw,
   Clock,
-  Camera,
-  Mic,
   FileDown,
-  ExternalLink
+  ExternalLink,
+  FileLock2,
+  KeyRound,
+  RefreshCw,
+  ChevronDown,
+  ShieldCheck
 } from 'lucide-react';
-import { Patient, Gender, Doctor, MedicalFile, User as AppUser, SigilousNote } from '../types';
-import PatientEvolution from './PatientEvolution';
+import { Patient, Gender, Doctor, MedicalFile, User as AppUser, SigilousNote, UserRole } from '../types';
 import RestrictedHistory from './RestrictedHistory';
 
 interface PatientManagerProps {
@@ -37,15 +33,19 @@ interface PatientManagerProps {
   sigilousNotes?: SigilousNote[];
 }
 
+const inputCls = 'w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-800 placeholder:text-slate-300 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all';
+
 const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, doctors, isAdmin, currentUser, sigilousNotes = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [viewingFile, setViewingFile] = useState<MedicalFile | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [restrictedPassword, setRestrictedPassword] = useState('');
-  const [showRestrictedPassword, setShowRestrictedPassword] = useState(false);
+  const [showSigilous, setShowSigilous] = useState(false);
+  const [sigilousUnlocked, setSigilousUnlocked] = useState(false);
+  const [sigilousInput, setSigilousInput] = useState('');
+  const [sigilousError, setSigilousError] = useState('');
+  const [showSigilousInput, setShowSigilousInput] = useState(false);
 
   const selectedPatient = patients.find(p => p.id === selectedPatientId) || null;
 
@@ -60,45 +60,9 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
 
   const filteredPatients = patients.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.cpf.includes(searchTerm)
+    p.cpf.includes(searchTerm) ||
+    p.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const handleSavePDF = () => {
-    if (!selectedPatient) return;
-    const originalTitle = document.title;
-    const safeName = selectedPatient.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
-    const dateStr = new Date().toISOString().split('T')[0];
-    document.title = `Prontuario_${safeName}_${dateStr}`;
-    const restoreTitle = () => {
-      document.title = originalTitle;
-      window.removeEventListener('afterprint', restoreTitle);
-    };
-    window.addEventListener('afterprint', restoreTitle);
-    window.print();
-    setTimeout(restoreTitle, 1000);
-  };
-
-  const openFileInNewTab = (file: MedicalFile) => {
-    try {
-      if (file.url.startsWith('data:application/pdf')) {
-        const base64Content = file.url.split(',')[1];
-        const binary = atob(base64Content);
-        const array = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
-        const blob = new Blob([array], { type: 'application/pdf' });
-        const blobUrl = URL.createObjectURL(blob);
-        window.open(blobUrl, '_blank');
-      } else {
-        const newWindow = window.open();
-        if (newWindow) {
-          newWindow.document.write(`<img src="${file.url}" style="max-width:100%; height:auto; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin: 20px auto; display: block;">`);
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao abrir arquivo:", e);
-      alert("Não foi possível abrir o arquivo nesta aba devido a restrições do navegador. Tente baixar o documento ou verifique se as janelas pop-up estão permitidas.");
-    }
-  };
 
   const startEdit = () => {
     if (!selectedPatient) return;
@@ -120,7 +84,9 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
       allergies: typeof formData.allergies === 'string' ? formData.allergies.split(',').map((a: string) => a.trim()).filter((a: string) => a !== '') : formData.allergies,
       preExistingConditions: typeof formData.preExistingConditions === 'string' ? formData.preExistingConditions.split(',').map((c: string) => c.trim()).filter((c: string) => c !== '') : formData.preExistingConditions,
       createdAt: showEditModal ? selectedPatient!.createdAt : new Date().toISOString(),
-      files: showEditModal ? selectedPatient!.files : []
+      files: showEditModal ? (selectedPatient!.files || []) : [],
+      patientPassword: showEditModal ? selectedPatient!.patientPassword : undefined,
+      patientPasswordSet: showEditModal ? selectedPatient!.patientPasswordSet : false,
     };
 
     setPatients(prev => {
@@ -141,7 +107,6 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedPatient) return;
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const newFile: MedicalFile = {
@@ -151,7 +116,6 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
         url: event.target?.result as string,
         category: file.type.includes('pdf') ? 'Laudo' : (file.type.includes('image') ? 'Exame' : 'Outros')
       };
-
       setPatients(prev => prev.map(p => 
         p.id === selectedPatient.id ? { ...p, files: [...(p.files || []), newFile] } : p
       ));
@@ -162,8 +126,34 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
   const removeFile = (id: string) => {
     if (!selectedPatient || !confirm('Excluir documento permanentemente?')) return;
     setPatients(prev => prev.map(p => 
-      p.id === selectedPatient.id ? { ...p, files: p.files.filter(f => f.id !== id) } : p
+      p.id === selectedPatient.id ? { ...p, files: (p.files || []).filter(f => f.id !== id) } : p
     ));
+  };
+
+  const handleResetPatientPassword = () => {
+    if (!selectedPatient || !confirm(`Resetar a senha de acesso de ${selectedPatient.name}? O paciente precisará criar uma nova senha no próximo acesso.`)) return;
+    setPatients(prev => prev.map(p => 
+      p.id === selectedPatient.id ? { ...p, patientPassword: undefined, patientPasswordSet: false } : p
+    ));
+    alert('Senha do paciente resetada com sucesso. O paciente deverá criar uma nova senha no próximo acesso.');
+  };
+
+  // Senha sigilosa = a senha definida pelo admin para o MÉDICO atual (User.senhaAcesso)
+  const doctorSigilousPassword = currentUser.senhaAcesso || '';
+
+  const handleUnlockSigilous = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!doctorSigilousPassword) {
+      setSigilousError('Nenhuma senha sigilosa foi configurada para seu perfil. Solicite ao administrador.');
+      return;
+    }
+    if (sigilousInput !== doctorSigilousPassword) {
+      setSigilousError('Senha sigilosa incorreta.');
+      return;
+    }
+    setSigilousUnlocked(true);
+    setSigilousError('');
+    setShowSigilousInput(false);
   };
 
   const historyBlocks = (selectedPatient?.history || '')
@@ -184,6 +174,74 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
     .filter(note => note.patientId === selectedPatient?.id)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+  const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode }> = ({ label, required, children }) => (
+    <div className="space-y-1.5">
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}{required && <span className="text-blue-500 ml-0.5">*</span>}</label>
+      {children}
+    </div>
+  );
+
+  const patientFormFields = (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Nome completo" required>
+          <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={inputCls} placeholder="Nome do paciente" required />
+        </Field>
+        <Field label="Data de Nascimento">
+          <input type="date" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: e.target.value})} className={inputCls} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="CPF">
+          <input type="text" value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} className={inputCls} placeholder="000.000.000-00" />
+        </Field>
+        <Field label="Gênero">
+          <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} className={inputCls}>
+            <option value={Gender.MALE}>Masculino</option>
+            <option value={Gender.FEMALE}>Feminino</option>
+            <option value={Gender.OTHER}>Outro</option>
+          </select>
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="E-mail">
+          <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className={inputCls} placeholder="paciente@email.com" />
+        </Field>
+        <Field label="Telefone">
+          <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className={inputCls} placeholder="(00) 00000-0000" />
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Plano de Saúde">
+          <input type="text" value={formData.healthInsurance || ''} onChange={e => setFormData({...formData, healthInsurance: e.target.value})} className={inputCls} placeholder="Ex: Unimed" />
+        </Field>
+        <Field label="Tipo Sanguíneo">
+          <select value={formData.bloodType || ''} onChange={e => setFormData({...formData, bloodType: e.target.value})} className={inputCls}>
+            <option value="">Não informado</option>
+            {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </Field>
+      </div>
+      <Field label="Endereço">
+        <input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className={inputCls} placeholder="Rua, número, bairro, cidade" />
+      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Alergias (separadas por vírgula)">
+          <input type="text" value={formData.allergies} onChange={e => setFormData({...formData, allergies: e.target.value})} className={inputCls} placeholder="Ex: Penicilina, Dipirona" />
+        </Field>
+        <Field label="Condições Pré-existentes">
+          <input type="text" value={formData.preExistingConditions} onChange={e => setFormData({...formData, preExistingConditions: e.target.value})} className={inputCls} placeholder="Ex: Hipertensão, Diabetes" />
+        </Field>
+      </div>
+      <Field label="Médico Principal">
+        <select value={formData.primaryDoctorId} onChange={e => setFormData({...formData, primaryDoctorId: e.target.value})} className={inputCls}>
+          <option value="">Sem médico vinculado</option>
+          {doctors.map(d => <option key={d.id} value={d.id}>{d.name} — {d.specialty}</option>)}
+        </select>
+      </Field>
+    </div>
+  );
+
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -191,6 +249,15 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Pacientes</h1>
           <p className="text-slate-500 font-medium">Gestão clínica e histórico dos pacientes.</p>
         </div>
+        {isAdmin && (
+          <button
+            onClick={() => { setFormData({ name: '', birthDate: '', gender: Gender.MALE, cpf: '', email: '', phone: '', address: '', healthInsurance: '', bloodType: '', allergies: '', preExistingConditions: '', history: '', primaryDoctorId: doctors[0]?.id || '' }); setShowAddModal(true); }}
+            className="flex items-center space-x-2 px-5 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all"
+          >
+            <Plus size={16} />
+            <span>Novo Paciente</span>
+          </button>
+        )}
       </div>
 
       <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
@@ -198,7 +265,7 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text" 
-            placeholder="Buscar por nome ou CPF..." 
+            placeholder="Buscar por nome, CPF ou e-mail..." 
             className="w-full pl-10 pr-4 py-3 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 text-sm font-bold outline-none transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -207,85 +274,297 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className={`space-y-4 transition-all duration-300 ${selectedPatient ? 'lg:col-span-4' : 'lg:col-span-12'}`}>
-          {filteredPatients.map((patient) => (
-            <div key={patient.id} className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm cursor-pointer" onClick={() => setSelectedPatientId(patient.id)}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-black text-slate-800">{patient.name}</h3>
-                  <p className="text-xs text-slate-400">CPF {patient.cpf}</p>
-                </div>
-                {patient.selfRegistered && <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Auto</span>}
-              </div>
+        {/* Lista de pacientes */}
+        <div className={`space-y-3 transition-all duration-300 ${selectedPatient ? 'lg:col-span-4' : 'lg:col-span-12'}`}>
+          {filteredPatients.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <UserIcon size={40} className="mx-auto mb-3 opacity-30" />
+              <p className="font-bold text-sm">Nenhum paciente encontrado.</p>
             </div>
-          ))}
+          ) : (
+            filteredPatients.map((patient) => (
+              <div 
+                key={patient.id} 
+                className={`bg-white rounded-3xl p-5 border cursor-pointer transition-all hover:shadow-md ${selectedPatientId === patient.id ? 'border-blue-500 ring-2 ring-blue-500/10' : 'border-slate-100 shadow-sm'}`}
+                onClick={() => { setSelectedPatientId(patient.id); setSigilousUnlocked(false); setShowSigilous(false); setSigilousInput(''); setSigilousError(''); }}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-blue-50 rounded-2xl flex items-center justify-center font-black text-blue-600 text-sm shrink-0">
+                    {patient.name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-black text-slate-800 text-sm truncate">{patient.name}</h3>
+                    <p className="text-xs text-slate-400 truncate">{patient.email || `CPF ${patient.cpf}`}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    {patient.selfRegistered && <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Auto</span>}
+                    {patient.patientPasswordSet && <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Portal Ativo</span>}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
+        {/* Detalhe do paciente */}
         {selectedPatient && (
-          <div className="lg:col-span-8 space-y-6">
-            <div className="bg-white rounded-[32px] border border-slate-200 p-8 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-800">{selectedPatient.name}</h2>
-                  <p className="text-slate-500 text-sm">CPF {selectedPatient.cpf}</p>
+          <div className="lg:col-span-8 space-y-5">
+
+            {/* Cabeçalho do paciente */}
+            <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div className="flex items-center space-x-4">
+                  <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center font-black text-blue-600 text-xl">
+                    {selectedPatient.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-800">{selectedPatient.name}</h2>
+                    <p className="text-slate-400 text-sm">{selectedPatient.email || `CPF: ${selectedPatient.cpf}`}</p>
+                    {selectedPatient.patientPasswordSet ? (
+                      <span className="inline-flex items-center space-x-1 text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mt-1">
+                        <ShieldCheck size={10} />
+                        <span>Portal do Paciente Ativo</span>
+                      </span>
+                    ) : (
+                      <span className="inline-block text-[10px] font-black text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full mt-1">
+                        Sem acesso ao portal
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <button type="button" className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest" onClick={() => setShowRestrictedPassword(true)}>
-                  Acesso Restrito
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {isAdmin && (
+                    <>
+                      <button
+                        onClick={startEdit}
+                        className="flex items-center space-x-1.5 px-4 py-2 bg-blue-50 text-blue-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-100 transition-all"
+                      >
+                        <Edit3 size={13} />
+                        <span>Editar Cadastro</span>
+                      </button>
+                      {selectedPatient.patientPasswordSet && (
+                        <button
+                          onClick={handleResetPatientPassword}
+                          className="flex items-center space-x-1.5 px-4 py-2 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-100 transition-all"
+                        >
+                          <RefreshCw size={13} />
+                          <span>Resetar Senha Portal</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Dados básicos */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[
+                  { label: 'CPF', value: selectedPatient.cpf },
+                  { label: 'Nascimento', value: selectedPatient.birthDate ? new Date(selectedPatient.birthDate + 'T00:00:00').toLocaleDateString('pt-BR') : '—' },
+                  { label: 'Telefone', value: selectedPatient.phone || '—' },
+                  { label: 'Plano', value: selectedPatient.healthInsurance || '—' },
+                  { label: 'Tipo Sanguíneo', value: selectedPatient.bloodType || '—' },
+                  { label: 'Médico', value: doctors.find(d => d.id === selectedPatient.primaryDoctorId)?.name || '—' },
+                ].map(item => (
+                  <div key={item.label} className="bg-slate-50 border border-slate-100 rounded-2xl p-3">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{item.label}</p>
+                    <p className="text-xs font-black text-slate-700 mt-0.5 truncate">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Alergias e condições */}
+              {(selectedPatient.allergies?.length > 0 || selectedPatient.preExistingConditions?.length > 0) && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {selectedPatient.allergies?.length > 0 && (
+                    <div className="bg-red-50 border border-red-100 rounded-2xl p-3">
+                      <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">Alergias</p>
+                      <p className="text-xs font-bold text-red-700">{selectedPatient.allergies.join(', ')}</p>
+                    </div>
+                  )}
+                  {selectedPatient.preExistingConditions?.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3">
+                      <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">Condições Pré-existentes</p>
+                      <p className="text-xs font-bold text-amber-700">{selectedPatient.preExistingConditions.join(', ')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Upload de arquivos */}
+              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(selectedPatient.files || []).length} Documento(s)</p>
+                <label className="cursor-pointer flex items-center space-x-1.5 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 hover:bg-slate-100 transition-all uppercase tracking-widest">
+                  <Upload size={12} />
+                  <span>Anexar arquivo</span>
+                  <input type="file" className="hidden" onChange={handleFileUpload} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
+                </label>
+              </div>
+
+              {(selectedPatient.files || []).length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {(selectedPatient.files || []).map(file => (
+                    <div key={file.id} className="flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl">
+                      <div className="flex items-center space-x-3">
+                        <FileIcon size={16} className="text-slate-400" />
+                        <div>
+                          <p className="text-xs font-black text-slate-700 truncate max-w-[180px]">{file.name}</p>
+                          <p className="text-[9px] text-slate-400 font-medium">{file.category} • {new Date(file.date).toLocaleDateString('pt-BR')}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <a href={file.url} download={file.name} className="p-2 text-slate-400 hover:text-blue-600 rounded-xl hover:bg-blue-50 transition-all">
+                          <Download size={14} />
+                        </a>
+                        <button onClick={() => removeFile(file.id)} className="p-2 text-slate-300 hover:text-red-500 rounded-xl hover:bg-red-50 transition-all">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Histórico completo */}
+            <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm space-y-4">
+              <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 flex items-center space-x-2">
+                <FileText size={14} />
+                <span>Histórico de Atendimentos</span>
+              </h3>
+              {historyBlocks.length === 0 ? (
+                <p className="text-sm italic text-slate-400 p-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center">
+                  Nenhum atendimento registrado no prontuário ainda.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {historyBlocks.map((block, index) => (
+                    <div key={index} className="rounded-2xl border border-slate-200 overflow-hidden">
+                      <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between gap-3">
+                        <span className="text-xs font-black text-blue-600 uppercase tracking-[0.15em] flex items-center space-x-1.5">
+                          <Clock size={11} />
+                          <span>{block.dateLabel}</span>
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-500 truncate">{block.author}</span>
+                      </div>
+                      <div className="p-5 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+                        {block.cleaned}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Área Sigilosa */}
+            <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 flex items-center space-x-2">
+                  <FileLock2 size={14} className="text-amber-500" />
+                  <span>Histórico Sigiloso</span>
+                </h3>
+                <button
+                  onClick={() => {
+                    if (!sigilousUnlocked) {
+                      setShowSigilousInput(v => !v);
+                      setSigilousError('');
+                    } else {
+                      setShowSigilous(v => !v);
+                    }
+                  }}
+                  className="flex items-center space-x-1.5 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all"
+                >
+                  <KeyRound size={12} />
+                  <span>{sigilousUnlocked ? (showSigilous ? 'Ocultar' : 'Ver Sigiloso') : 'Ver Histórico Sigiloso'}</span>
                 </button>
               </div>
 
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Histórico completo</h3>
-                  {historyBlocks.length === 0 ? (
-                    <p className="text-sm italic text-slate-400 p-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center">
-                      Nenhum histórico registrado no prontuário até o momento.
+              {!sigilousUnlocked && showSigilousInput && (
+                <form onSubmit={handleUnlockSigilous} className="space-y-3 p-5 bg-amber-50 border border-amber-200 rounded-2xl animate-in fade-in duration-200">
+                  <p className="text-xs font-bold text-amber-700 leading-relaxed">
+                    Insira sua senha sigilosa (definida pelo administrador para seu perfil) para visualizar as anotações confidenciais.
+                  </p>
+                  {sigilousError && (
+                    <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 p-3 rounded-xl">{sigilousError}</p>
+                  )}
+                  <div className="flex space-x-2">
+                    <input
+                      type="password"
+                      value={sigilousInput}
+                      onChange={e => setSigilousInput(e.target.value)}
+                      placeholder="Senha sigilosa"
+                      className="flex-1 px-4 py-3 bg-white border border-amber-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-amber-500/10 transition-all"
+                      autoFocus
+                    />
+                    <button type="submit" className="px-5 py-3 bg-amber-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all">
+                      Desbloquear
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {sigilousUnlocked && showSigilous && (
+                <div className="animate-in fade-in duration-200">
+                  {patientSigilousNotes.length === 0 ? (
+                    <p className="text-sm italic text-slate-400 p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
+                      Nenhuma anotação sigilosa registrada para este paciente.
                     </p>
                   ) : (
-                    <div className="space-y-4">
-                      {historyBlocks.map((block, index) => (
-                        <div key={index} className="rounded-3xl border border-slate-200 overflow-hidden">
-                          <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between gap-3">
-                            <span className="text-xs font-black text-blue-600 uppercase tracking-[0.2em]">{block.dateLabel}</span>
-                            <span className="text-[10px] font-bold text-slate-500 truncate">{block.author}</span>
+                    <div className="space-y-3">
+                      {patientSigilousNotes.map(note => (
+                        <div key={note.id} className="rounded-2xl border border-amber-200 overflow-hidden">
+                          <div className="flex items-center justify-between px-5 py-3 bg-amber-50 border-b border-amber-100">
+                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest flex items-center space-x-1.5">
+                              <Clock size={11} />
+                              <span>{new Date(note.createdAt).toLocaleDateString('pt-BR')} às {new Date(note.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-500">{note.authorName}{note.authorSpecialty ? ` • ${note.authorSpecialty}` : ''}</span>
                           </div>
-                          <div className="p-5 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
-                            {block.cleaned}
+                          <div className="p-5 text-sm text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">
+                            {note.note}
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-
-                <div className="pt-4 border-t border-slate-100">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-black uppercase tracking-widest"
-                    onClick={() => setShowRestrictedPassword(v => !v)}
-                  >
-                    {showRestrictedPassword ? 'Ocultar histórico sigiloso' : 'Ver histórico sigiloso'}
-                  </button>
-                  {showRestrictedPassword && (
-                    <div className="mt-4">
-                      <RestrictedHistory
-                        patientId={selectedPatient.id}
-                        currentUserName={currentUser.name}
-                        entries={patientSigilousNotes.map(note => {
-                          const when = new Date(note.createdAt).toLocaleDateString('pt-BR');
-                          const time = new Date(note.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                          return `[DATA: ${when} às ${time}]\n${note.authorName}\n${note.note}`;
-                        })}
-                        adminGeneratedPassword={restrictedPassword}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
+
           </div>
         )}
       </div>
+
+      {/* Modal Adicionar/Editar */}
+      {(showAddModal || showEditModal) && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 my-4">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-black text-slate-800 flex items-center space-x-2">
+                <UserIcon size={20} className="text-blue-600" />
+                <span>{showEditModal ? 'Editar Cadastro' : 'Novo Paciente'}</span>
+              </h3>
+              <button onClick={() => { setShowAddModal(false); setShowEditModal(false); }} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSavePatient}>
+              <div className="p-6 max-h-[70vh] overflow-y-auto">
+                {patientFormFields}
+              </div>
+              <div className="p-6 border-t border-slate-100 flex items-center justify-end space-x-3">
+                <button type="button" onClick={() => { setShowAddModal(false); setShowEditModal(false); }} className="px-5 py-3 border border-slate-200 text-slate-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={isSaving} className="px-6 py-3 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center space-x-2 disabled:opacity-60">
+                  {isSaving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

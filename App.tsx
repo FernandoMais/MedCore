@@ -42,6 +42,8 @@ import LandingPage from './components/LandingPage';
 import AppointmentReport from './components/AppointmentReport';
 import MedicationRegistry from './components/MedicationRegistry';
 import PatientSelfRegister from './components/PatientSelfRegister';
+import PatientLogin from './components/PatientLogin';
+import PatientPortal from './components/PatientPortal';
 
 type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups' | 'reports' | 'medications';
 type AppScreen = 'landing' | 'login' | 'self-register' | 'app';
@@ -56,6 +58,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [showSelfRegister, setShowSelfRegister] = useState(false);
+  const [showPatientLogin, setShowPatientLogin] = useState(false);
+  const [loggedPatient, setLoggedPatient] = useState<import('./types').Patient | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -130,11 +134,44 @@ const App: React.FC = () => {
     );
   }
 
+  if (showPatientLogin) {
+    if (loggedPatient) {
+      return (
+        <PatientPortal
+          patient={loggedPatient}
+          doctors={db.doctors || []}
+          appointments={(db.appointments || []).filter(a => a.patientId === loggedPatient.id)}
+          onAddAppointment={(appt) => {
+            setDb(prev => ({ ...prev, appointments: [appt, ...(prev.appointments || [])] }));
+            setLoggedPatient(prev => prev ? { ...prev } : prev);
+          }}
+          onLogout={() => { setLoggedPatient(null); setShowPatientLogin(false); setShowLanding(true); }}
+        />
+      );
+    }
+    return (
+      <PatientLogin
+        patients={db.patients || []}
+        onLogin={(patient) => setLoggedPatient(patient)}
+        onSetPassword={(patientId, password) => {
+          setDb(prev => ({
+            ...prev,
+            patients: (prev.patients || []).map(p =>
+              p.id === patientId ? { ...p, patientPassword: password, patientPasswordSet: true } : p
+            )
+          }));
+        }}
+        onBack={() => { setShowPatientLogin(false); setShowLanding(true); }}
+      />
+    );
+  }
+
   if (showLanding && !currentUser) {
     return (
       <LandingPage
         onEnter={() => setShowLanding(false)}
         onSelfRegister={() => setShowSelfRegister(true)}
+        onPatientLogin={() => { setShowLanding(false); setShowPatientLogin(true); }}
       />
     );
   }
@@ -422,6 +459,7 @@ const App: React.FC = () => {
               doctors={db.doctors || []}
               isAdmin={currentUser.role === UserRole.ADMIN}
               currentUser={currentUser}
+              sigilousNotes={db.sigilousNotes || []}
             />
           )}
           {currentView === 'medications' && (

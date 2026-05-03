@@ -14,9 +14,10 @@ import {
 interface LandingPageProps {
   onEnter: () => void;
   onSelfRegister: () => void;
+  onPatientLogin?: () => void;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onSelfRegister }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onSelfRegister, onPatientLogin }) => {
   return (
     <div className="min-h-screen bg-white overflow-x-hidden font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Background Decor */}
@@ -58,9 +59,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onSelfRegister }) =>
               onClick={onEnter}
               className="group relative px-12 py-6 bg-blue-600 text-white rounded-[32px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 flex items-center space-x-4 overflow-hidden"
             >
-              <span className="relative z-10">Iniciar Atendimento</span>
+              <span className="relative z-10">Acesso Profissional</span>
               <ArrowRight size={18} className="relative z-10 group-hover:translate-x-2 transition-transform" />
               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            </button>
+            <button
+              onClick={onPatientLogin}
+              className="group px-12 py-6 bg-emerald-600 text-white rounded-[32px] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95 flex items-center space-x-4"
+            >
+              <Calendar size={18} className="group-hover:scale-110 transition-transform" />
+              <span>Área do Paciente</span>
             </button>
             <button
               onClick={onSelfRegister}
