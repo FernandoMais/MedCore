@@ -41,8 +41,10 @@ import Login from './components/Login';
 import LandingPage from './components/LandingPage';
 import AppointmentReport from './components/AppointmentReport';
 import MedicationRegistry from './components/MedicationRegistry';
+import PatientSelfRegister from './components/PatientSelfRegister';
 
 type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups' | 'reports' | 'medications';
+type AppScreen = 'landing' | 'login' | 'self-register' | 'app';
 
 const App: React.FC = () => {
   const [db, setDb] = useState<AppDatabase>(storage.initLocal());
@@ -51,8 +53,9 @@ const App: React.FC = () => {
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline'>('offline');
-  const [isLoading, setIsLoading] = useState(false); 
+  const [isLoading, setIsLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
+  const [showSelfRegister, setShowSelfRegister] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -116,8 +119,24 @@ const App: React.FC = () => {
     );
   }
 
+  if (showSelfRegister) {
+    return (
+      <PatientSelfRegister
+        onBack={() => setShowSelfRegister(false)}
+        onSubmit={(newPatient) => {
+          setDb(prev => ({ ...prev, patients: [newPatient, ...(prev.patients || [])] }));
+        }}
+      />
+    );
+  }
+
   if (showLanding && !currentUser) {
-    return <LandingPage onEnter={() => setShowLanding(false)} />;
+    return (
+      <LandingPage
+        onEnter={() => setShowLanding(false)}
+        onSelfRegister={() => setShowSelfRegister(true)}
+      />
+    );
   }
 
   if (!currentUser) {

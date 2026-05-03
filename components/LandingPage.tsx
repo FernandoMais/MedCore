@@ -13,9 +13,10 @@ import {
 
 interface LandingPageProps {
   onEnter: () => void;
+  onSelfRegister: () => void;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onSelfRegister }) => {
   return (
     <div className="min-h-screen bg-white overflow-x-hidden font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Background Decor */}
@@ -59,8 +60,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             O ecossistema definitivo para médicos modernos. Prontuário eletrônico inteligente, agenda dinâmica e assistência clínica por IA integrada ao Supabase.
           </p>
 
-          <div className="flex flex-col md:flex-row items-center justify-center gap-6 pt-8 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
-            <button 
+          <div className="flex flex-col md:flex-row items-center justify-center gap-4 pt-8 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
+            <button
               onClick={onEnter}
               className="group relative px-12 py-6 bg-blue-600 text-white rounded-[32px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 flex items-center space-x-4 overflow-hidden"
             >
@@ -68,11 +69,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
               <ArrowRight size={18} className="relative z-10 group-hover:translate-x-2 transition-transform" />
               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
             </button>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
-              <ShieldCheck size={14} className="mr-2 text-emerald-500" />
-              Segurança em nível bancário (LGPD)
-            </p>
+            <button
+              onClick={onSelfRegister}
+              className="group px-12 py-6 bg-white border-2 border-slate-200 text-slate-700 rounded-[32px] font-black text-xs uppercase tracking-[0.2em] shadow-lg hover:border-blue-300 hover:text-blue-700 hover:shadow-xl transition-all active:scale-95 flex items-center space-x-4"
+            >
+              <Users size={18} className="group-hover:scale-110 transition-transform" />
+              <span>Fazer meu Cadastro</span>
+            </button>
           </div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center mt-4 animate-in fade-in duration-700 delay-400">
+            <ShieldCheck size={14} className="mr-2 text-emerald-500" />
+            Segurança em nível bancário (LGPD)
+          </p>
         </div>
 
         {/* Feature Grid */}

@@ -38,6 +38,7 @@ function createStub() {
       signUp: () => Promise.resolve({ data: null, error }),
       signOut: () => Promise.resolve({ error: null }),
       updateUser: () => Promise.resolve({ data: null, error }),
+      resetPasswordForEmail: () => Promise.resolve({ data: null, error }),
     },
   };
 }

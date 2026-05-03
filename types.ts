@@ -65,14 +65,24 @@ export interface Patient {
   email: string;
   phone: string;
   address: string;
+  // Campos de endereço detalhados (autocadastro)
+  streetName?: string;
+  streetNumber?: string;
+  neighborhood?: string;
+  city?: string;
+  zipCode?: string;
   healthInsurance?: string;
   bloodType?: string;
   allergies: string[];
   history: string;
   preExistingConditions: string[];
   createdAt: string;
-  primaryDoctorId: string; // Vínculo principal para controle de acesso
-  files: MedicalFile[]; // Nova lista de documentos
+  primaryDoctorId: string;
+  files: MedicalFile[];
+  // Dados financeiros do autocadastro
+  paymentValue?: string;
+  paymentSender?: string;
+  selfRegistered?: boolean;
 }
 
 export interface Appointment {
