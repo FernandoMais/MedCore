@@ -34,13 +34,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onSelfRegister }) =>
           </div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-900">MedCore<span className="text-blue-600">Pro</span></h1>
         </div>
-        <button 
-          onClick={onEnter}
-          className="hidden md:flex items-center space-x-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl active:scale-95"
-        >
-          <span>Acesso Restrito</span>
-          <ChevronRight size={14} />
-        </button>
       </nav>
 
       {/* Hero Section */}

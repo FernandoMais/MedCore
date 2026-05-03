@@ -31,7 +31,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
       if (result.ok) {
         onLogin(result.user);
       } else {
-        setError(result.error);
+        setError('error' in result ? result.error : 'Falha inesperada ao entrar.');
       }
     } catch (err: any) {
       setError(err?.message || 'Falha inesperada ao entrar.');
