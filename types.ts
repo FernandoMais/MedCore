@@ -8,10 +8,11 @@ export enum UserRole {
 export interface User {
   id: string;
   username: string;
-  password: string; // Em produção, usar hash
+  password: string;
   name: string;
   role: UserRole;
-  doctorId?: string; // Vínculo se o usuário for um médico
+  doctorId?: string;
+  senhaAcesso?: string; // Senha sigilosa definida pelo admin para acesso a informações restritas
 }
 
 export enum AppointmentStatus {
@@ -52,7 +53,7 @@ export interface MedicalFile {
   type: string;
   size: number;
   date: string;
-  url: string; // Base64 ou URL fictícia para este ambiente
+  url: string;
   category: 'Exame' | 'Receita' | 'Laudo' | 'Outros';
 }
 
@@ -65,7 +66,6 @@ export interface Patient {
   email: string;
   phone: string;
   address: string;
-  // Campos de endereço detalhados (autocadastro)
   streetName?: string;
   streetNumber?: string;
   neighborhood?: string;
@@ -79,7 +79,6 @@ export interface Patient {
   createdAt: string;
   primaryDoctorId: string;
   files: MedicalFile[];
-  // Dados financeiros do autocadastro
   paymentValue?: string;
   paymentSender?: string;
   selfRegistered?: boolean;
@@ -133,6 +132,16 @@ export interface EvolutionEntry {
   medico_nome: string;
   especialidade: string;
   anotacoes: string;
-  senha_acesso: string; // Hash da senha para acesso sigiloso
+  senha_acesso: string;
   data_criacao: string;
+}
+
+export interface SigilousNote {
+  id: string;
+  patientId: string;
+  authorId: string;
+  authorName: string;
+  authorSpecialty?: string;
+  note: string;
+  createdAt: string; // ISO string
 }

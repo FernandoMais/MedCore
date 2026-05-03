@@ -1,5 +1,5 @@
 
-import { Patient, Doctor, Appointment, MedicalRecord, User, UserRole, Medication } from '../types';
+import { Patient, Doctor, Appointment, MedicalRecord, User, UserRole, Medication, SigilousNote } from '../types';
 import { MOCK_PATIENTS, MOCK_DOCTORS, MOCK_APPOINTMENTS } from '../constants';
 import { supabase } from './supabase';
 
@@ -12,6 +12,7 @@ export interface AppDatabase {
   appointments: Appointment[];
   medicalRecords: MedicalRecord[];
   medications: Medication[];
+  sigilousNotes: SigilousNote[];
   lastBackup?: string;
 }
 
@@ -29,6 +30,7 @@ const DEFAULT_DB: AppDatabase = {
     { id: 'm1', name: 'Amoxicilina', dosage: '500mg', posology: 'Tomar 1 comprimido de 8 em 8 horas', period: '7 dias', purpose: 'Antibiótico', manufacturer: 'Eurofarma' },
     { id: 'm2', name: 'Dipirona', dosage: '500mg', posology: '1 comprimido se dor ou febre', period: 'Até de 6 em 6 horas', purpose: 'Analgésico e Antitérmico', manufacturer: 'Medley' }
   ],
+  sigilousNotes: [],
 };
 
 export const storage = {
@@ -40,7 +42,6 @@ export const storage = {
         const users = Array.isArray(parsed.users) && parsed.users.length > 0
           ? parsed.users
           : DEFAULT_DB.users;
-        // Garante que o usuário admin sempre exista (proteção contra wipe acidental)
         const hasAdmin = users.some((u: User) => u.username === 'admin');
         const finalUsers = hasAdmin ? users : [...DEFAULT_DB.users.filter(u => u.username === 'admin'), ...users];
         return {
@@ -50,6 +51,7 @@ export const storage = {
           appointments: Array.isArray(parsed.appointments) ? parsed.appointments : DEFAULT_DB.appointments,
           medicalRecords: Array.isArray(parsed.medicalRecords) ? parsed.medicalRecords : DEFAULT_DB.medicalRecords,
           medications: Array.isArray(parsed.medications) ? parsed.medications : DEFAULT_DB.medications,
+          sigilousNotes: Array.isArray(parsed.sigilousNotes) ? parsed.sigilousNotes : DEFAULT_DB.sigilousNotes,
           lastBackup: parsed.lastBackup
         };
       }
@@ -62,9 +64,6 @@ export const storage = {
   fetchFromCloud: async (): Promise<Partial<AppDatabase>> => {
     try {
       const cloudData: Partial<AppDatabase> = {};
-      // Importante: nunca sobrescrever dados locais com array vazio da nuvem.
-      // Caso a tabela ainda esteja vazia, mantemos o que temos local e o syncToCloud
-      // posterior é quem vai populá-la.
       const assignIfNonEmpty = <K extends keyof AppDatabase>(key: K, res: any) => {
         if (!res.error && Array.isArray(res.data) && res.data.length > 0) {
           (cloudData as any)[key] = res.data;
@@ -76,6 +75,7 @@ export const storage = {
       assignIfNonEmpty('appointments', await supabase.from('appointments').select('*'));
       assignIfNonEmpty('users', await supabase.from('users').select('*'));
       assignIfNonEmpty('medications', await supabase.from('medications').select('*'));
+      assignIfNonEmpty('sigilousNotes', await supabase.from('sigilous_notes').select('*'));
 
       return cloudData;
     } catch (e) {
@@ -99,6 +99,7 @@ export const storage = {
       if (db.appointments?.length > 0) await supabase.from('appointments').upsert(db.appointments);
       if (db.users?.length > 0) await supabase.from('users').upsert(db.users);
       if (db.medications?.length > 0) await supabase.from('medications').upsert(db.medications);
+      if (db.sigilousNotes?.length > 0) await supabase.from('sigilous_notes').upsert(db.sigilousNotes);
     } catch (e) {
       console.error("Erro na sincronização cloud:", e);
       throw e;
@@ -107,6 +108,10 @@ export const storage = {
 
   saveEvolutionToCloud: async (evolution: any) => {
     return await supabase.from('evolucao_paciente').insert([evolution]);
+  },
+
+  saveSigilousNoteToCloud: async (note: SigilousNote) => {
+    return await supabase.from('sigilous_notes').insert([note]);
   },
 
   exportBackup: (db?: AppDatabase) => {

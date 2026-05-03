@@ -29,7 +29,7 @@ import {
   Menu,
   X
 } from 'lucide-react';
-import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus, Medication } from './types';
+import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus, Medication, SigilousNote } from './types';
 import { storage, AppDatabase } from './services/storage';
 import Dashboard from './components/Dashboard';
 import PatientManager from './components/PatientManager';
@@ -479,11 +479,21 @@ const App: React.FC = () => {
               patients={db.patients || []}
               doctors={db.doctors || []}
               medications={db.medications || []}
+              currentUser={currentUser}
+              users={db.users || []}
+              sigilousNotes={db.sigilousNotes || []}
               setMedications={(newM) => setDb(prev => {
                 const medicationsList = prev.medications || [];
                 const nextMedications = typeof newM === 'function' ? newM(medicationsList) : newM;
                 return { ...prev, medications: nextMedications };
               })}
+              onAddSigilousNote={(note: SigilousNote) => {
+                setDb(prev => ({
+                  ...prev,
+                  sigilousNotes: [note, ...(prev.sigilousNotes || [])]
+                }));
+                storage.saveSigilousNoteToCloud(note).catch(() => {});
+              }}
               onFinish={handleFinishConsultation}
             />
           )}

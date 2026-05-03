@@ -8,28 +8,24 @@ import {
   CheckCircle,
   Clock,
   ShieldAlert,
-  FolderOpen,
-  FileIcon,
   Eye,
   X,
-  FileText,
   ShieldCheck,
   RefreshCw,
-  Upload,
-  ExternalLink,
-  Save,
-  User as UserIcon,
-  Activity,
   History,
   AlertCircle,
-  ArrowRight,
   Printer,
   PlusCircle,
   Pill,
   Search,
-  Check
+  Lock,
+  KeyRound,
+  EyeOff,
+  FileLock2,
+  Plus,
+  Send
 } from 'lucide-react';
-import { Appointment, Patient, Prescription, Doctor, MedicalFile, Medication } from '../types';
+import { Appointment, Patient, Doctor, Medication, SigilousNote, User } from '../types';
 import { getICDRecommendation } from '../services/gemini';
 
 interface ConsultationRoomProps {
@@ -38,7 +34,11 @@ interface ConsultationRoomProps {
   patients: Patient[];
   doctors: Doctor[];
   medications: Medication[];
+  currentUser: User;
+  users: User[];
+  sigilousNotes: SigilousNote[];
   setMedications: React.Dispatch<React.SetStateAction<Medication[]>>;
+  onAddSigilousNote: (note: SigilousNote) => void;
   onFinish: (evolutionData?: { 
     diagnosis: string; 
     conduct: string; 
@@ -55,7 +55,11 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   patients, 
   doctors,
   medications,
+  currentUser,
+  users,
+  sigilousNotes,
   setMedications,
+  onAddSigilousNote,
   onFinish 
 }) => {
   const appointment = appointments.find(a => a.id === appointmentId);
@@ -72,16 +76,22 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   
-  // Estados para cadastro de novo medicamento
   const [showMedRegistration, setShowMedRegistration] = useState(false);
   const [newMedName, setNewMedName] = useState('');
   const [newMedDosage, setNewMedDosage] = useState('');
   const [newMedPosology, setNewMedPosology] = useState('');
   
-  // Estados para busca de medicamentos
   const [medSearch, setMedSearch] = useState('');
   const [showMedResults, setShowMedResults] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Sigilous notes states
+  const [sigilousUnlocked, setSigilousUnlocked] = useState(false);
+  const [sigilousPasswordInput, setSigilousPasswordInput] = useState('');
+  const [sigilousPasswordVisible, setSigilousPasswordVisible] = useState(false);
+  const [sigilousError, setSigilousError] = useState('');
+  const [newSigilousNote, setNewSigilousNote] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
 
   const filteredMeds = medications.filter(m => 
     m.name.toLowerCase().includes(medSearch.toLowerCase()) ||
@@ -154,12 +164,8 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   const handleAddCustomMedication = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMedName.trim()) return;
-    
-    // 1. Adicionar à prescrição atual
     const entry = `${newMedName} ${newMedDosage}\nUso: ${newMedPosology || 'A definir'}\n\n`;
     setPrescription(prev => prev + entry);
-    
-    // 2. Salvar no cadastro global de medicamentos para uso futuro
     const newMed: Medication = {
       id: createId('med'),
       name: newMedName,
@@ -168,8 +174,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
       purpose: 'Cadastrado durante consulta'
     };
     setMedications(prev => [newMed, ...prev]);
-    
-    // Reset form and close modal
     setNewMedName('');
     setNewMedDosage('');
     setNewMedPosology('');
@@ -182,8 +186,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
       alert(`Preencha o conteúdo de ${type === 'prescription' ? 'receita' : 'exame'} antes de imprimir.`);
       return;
     }
-    
-    console.log(`Iniciando impressão de ${type}...`);
     const className = type === 'prescription' ? 'printing-prescription' : 'printing-exam';
     const cleanup = () => {
       document.body.classList.remove(className);
@@ -202,27 +204,19 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   };
 
   const handleFinalize = async (e?: React.FormEvent | React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-    }
-
+    if (e) e.preventDefault();
     if (!complaint.trim()) {
       alert("A 'Queixa Principal / Evolução' é obrigatória para finalizar o atendimento.");
       return;
     }
-
     if (isSensitiveSpecialty(specialty) && !accessPassword.trim()) {
       alert("Informe a senha de acesso sigiloso para atendimentos de Psicologia ou Psiquiatria.");
       return;
     }
-
     if (window.confirm("Confirmar encerramento da consulta?\n\nOs dados serão arquivados no prontuário do paciente permanentemente.")) {
       setIsFinishing(true);
-      
       try {
-        console.log("Finalizando consulta para o atendimento:", appointmentId);
         const protectedPassword = accessPassword.trim() ? await hashAccessPassword(accessPassword.trim()) : '';
-        
         await onFinish({ 
           diagnosis, 
           conduct, 
@@ -231,8 +225,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
           especialidade: specialty,
           senha_acesso: protectedPassword
         });
-
-        // Remove o rascunho do localStorage APÓS o sucesso do onFinish
         localStorage.removeItem(`medcore_consult_draft_${appointmentId}`);
       } catch (error) {
         console.error("Erro ao finalizar consulta:", error);
@@ -243,6 +235,47 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     }
   };
 
+  // ---- Sigilous notes unlock ----
+  const handleUnlockSigilous = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSigilousError('');
+    const userRecord = users.find(u => u.id === currentUser.id);
+    const expected = userRecord?.senhaAcesso || '';
+    if (!expected) {
+      setSigilousError('Nenhuma senha sigilosa foi configurada para o seu usuário. Solicite ao administrador.');
+      return;
+    }
+    if (sigilousPasswordInput !== expected) {
+      setSigilousError('Senha sigilosa incorreta.');
+      return;
+    }
+    setSigilousUnlocked(true);
+    setSigilousPasswordInput('');
+    setSigilousError('');
+  };
+
+  const handleSaveSigilousNote = async () => {
+    if (!newSigilousNote.trim() || !patient) return;
+    setIsSavingNote(true);
+    const note: SigilousNote = {
+      id: createId('sig'),
+      patientId: patient.id,
+      authorId: currentUser.id,
+      authorName: currentUser.name,
+      authorSpecialty: doctor?.specialty,
+      note: newSigilousNote.trim(),
+      createdAt: new Date().toISOString()
+    };
+    onAddSigilousNote(note);
+    setNewSigilousNote('');
+    setIsSavingNote(false);
+  };
+
+  // Patient sigilous notes sorted by date desc
+  const patientSigilousNotes = (sigilousNotes || [])
+    .filter(n => n.patientId === patient?.id)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
   const renderFormattedHistory = (historyText: string) => {
     if (!historyText) return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-300">
@@ -251,25 +284,46 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
       </div>
     );
 
+    // Parse history into blocks sorted by date
+    const blocks: { date: string; content: string }[] = [];
     const parts = historyText.split(/(\[DATA: .*?\])/);
+    let currentDate = '';
+    let currentContent = '';
+    for (const part of parts) {
+      if (part.startsWith('[DATA:')) {
+        if (currentDate && currentContent.trim()) {
+          blocks.push({ date: currentDate, content: currentContent.trim() });
+        }
+        currentDate = part.replace(/[\[\]]/g, '');
+        currentContent = '';
+      } else {
+        currentContent += part;
+      }
+    }
+    if (currentDate && currentContent.trim()) {
+      blocks.push({ date: currentDate, content: currentContent.trim() });
+    }
+
+    if (blocks.length === 0) return (
+      <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+        <History size={48} className="mb-4 opacity-20" />
+        <p className="text-xs font-black uppercase tracking-widest italic text-center">Nenhum registro prévio.</p>
+      </div>
+    );
+
     return (
       <div className="space-y-4">
-        {parts.map((part, index) => {
-          if (part.startsWith('[DATA:')) {
-            return (
-              <div key={index} className="flex items-center space-x-3 pt-6 pb-2 border-b border-slate-100 mt-4 first:mt-0 no-print-area">
-                <Clock size={14} className="text-blue-500" />
-                <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">{part.replace(/[\[\]]/g, '')}</span>
-              </div>
-            );
-          }
-          if (!part.trim()) return null;
-          return (
-            <div key={index} className="bg-white border border-slate-100 p-5 rounded-2xl text-[11px] font-bold text-slate-700 whitespace-pre-wrap leading-relaxed shadow-sm no-print-area">
-              {part.trim()}
+        {blocks.map((block, index) => (
+          <div key={index} className="border border-slate-100 rounded-2xl overflow-hidden">
+            <div className="flex items-center space-x-3 px-5 py-3 bg-blue-50 border-b border-blue-100">
+              <Clock size={13} className="text-blue-500 shrink-0" />
+              <span className="text-[10px] font-black text-blue-700 uppercase tracking-[0.15em]">{block.date}</span>
             </div>
-          );
-        })}
+            <div className="p-5 text-[11px] font-bold text-slate-700 whitespace-pre-wrap leading-relaxed bg-white">
+              {block.content}
+            </div>
+          </div>
+        ))}
       </div>
     );
   };
@@ -279,14 +333,13 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   return (
     <div id="print-area" className="max-w-[100%] mx-auto space-y-6 pb-20 animate-in fade-in duration-500 flex flex-col">
       
-      {/* DOCUMENTO PARA IMPRESSÃO DE RECEITA (Portal para o Body) */}
+      {/* DOCUMENTO PARA IMPRESSÃO DE RECEITA */}
       {createPortal(
         <div className="print-only prescription-print-content">
           <div className="prescription-header text-center border-b-2 border-slate-900 pb-6 mb-8">
             <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tight">Ambulatório Restaura Integral</h1>
             <p className="text-sm font-bold text-slate-500 mt-2 uppercase tracking-[0.3em]">Cuidado e Saúde com Excelência</p>
           </div>
-
           <div className="flex justify-between items-start mb-10">
             <div className="p-6 border border-slate-200 rounded-2xl bg-slate-50/50 flex-1 mr-4">
               <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Paciente</p>
@@ -301,14 +354,12 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
               <p className="text-lg font-black text-slate-900">{new Date().toLocaleDateString('pt-BR')}</p>
             </div>
           </div>
-
           <div className="prescription-body min-h-[400px]">
             <h2 className="text-sm font-black uppercase tracking-[0.4em] text-slate-900 border-b border-slate-200 pb-3 mb-8">Receituário Médico</h2>
             <div className="whitespace-pre-wrap text-lg leading-relaxed font-medium text-slate-800">
               {prescription || "Nenhum medicamento prescrito nesta consulta."}
             </div>
           </div>
-
           <div className="prescription-footer mt-20 flex flex-col items-end">
             <div className="w-64 text-center">
               <div className="signature-line border-t-2 border-slate-900 mb-2"></div>
@@ -320,7 +371,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
         document.body
       )}
 
-      {/* DOCUMENTO PARA IMPRESSÃO DE EXAME (Portal para o Body) */}
+      {/* DOCUMENTO PARA IMPRESSÃO DE EXAME */}
       {createPortal(
         <div className="print-only exam-print-content">
           <div className="prescription-header">
@@ -329,7 +380,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             <p className="text-sm font-black text-blue-500 uppercase tracking-widest">CRM: {doctor?.crm}</p>
             <p className="text-xs text-slate-500 mt-2">{doctor?.specialty} • Fone: {doctor?.phone}</p>
           </div>
-
           <div className="mb-10 p-6 border border-slate-200 rounded-2xl bg-slate-50/50">
             <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Paciente</p>
             <p className="text-2xl font-black text-slate-900">{patient.name}</p>
@@ -338,14 +388,10 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
               <span>Nasc: {new Date(patient.birthDate).toLocaleDateString('pt-BR')}</span>
             </div>
           </div>
-
           <div className="prescription-body">
             <h2 className="text-sm font-black uppercase tracking-[0.4em] text-blue-600 border-b-2 border-blue-100 pb-3 mb-8">Solicitação de Exames / Procedimentos</h2>
-            <div className="whitespace-pre-wrap">
-              {conduct || "Nenhuma solicitação registrada."}
-            </div>
+            <div className="whitespace-pre-wrap">{conduct || "Nenhuma solicitação registrada."}</div>
           </div>
-
           <div className="prescription-footer">
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-6">Emissão do sistema em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</p>
             <div className="signature-line"></div>
@@ -356,7 +402,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
         document.body
       )}
 
-      {/* Barra de Ações Superior (Apenas Tela) */}
+      {/* Barra de Ações Superior */}
       <div className="bg-white p-4 lg:p-6 rounded-[24px] lg:rounded-[32px] border border-slate-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 sticky top-0 z-20 no-print">
         <div className="flex items-center space-x-4 lg:space-x-6">
           <button 
@@ -385,22 +431,18 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             type="button"
             onClick={() => handlePrint('exam')}
             className="shrink-0 px-4 lg:px-5 py-3 lg:py-4 bg-white border border-slate-200 text-emerald-600 rounded-xl lg:rounded-[20px] hover:bg-emerald-50 hover:border-emerald-300 transition-all active:scale-95 shadow-sm flex items-center space-x-2"
-            title="Imprimir Pedido de Exames"
            >
               <Printer size={18} />
               <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">Exames</span>
            </button>
-
            <button 
             type="button"
             onClick={() => handlePrint('prescription')}
             className="shrink-0 px-4 lg:px-5 py-3 lg:py-4 bg-white border border-slate-200 text-blue-600 rounded-xl lg:rounded-[20px] hover:bg-blue-50 hover:border-blue-300 transition-all active:scale-95 shadow-sm flex items-center space-x-2"
-            title="Imprimir Receituário Interno"
            >
               <Printer size={18} />
               <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">Receita</span>
            </button>
-
            <button 
             type="button"
             onClick={openOfficialPrescription}
@@ -412,7 +454,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
         </div>
       </div>
 
-      {/* Histórico Prévio - Seção de Largura Total e Vertical */}
+      {/* ========= Histórico Geral do Paciente ========= */}
       <div className="bg-white p-6 lg:p-10 rounded-[32px] border border-slate-200 shadow-sm no-print">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
@@ -420,23 +462,164 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
               <History size={24} />
             </div>
             <div>
-              <h3 className="text-xl font-black text-slate-800 tracking-tight">Histórico Completo do Paciente</h3>
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Todos os registros anteriores organizados por data</p>
+              <h3 className="text-xl font-black text-slate-800 tracking-tight">Histórico do Paciente</h3>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Registros organizados por data</p>
             </div>
           </div>
           <div className="text-right">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total de Registros</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Registros</span>
             <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black shadow-lg shadow-blue-100">
               {patient.history ? patient.history.split('[DATA:').length - 1 : 0}
             </span>
           </div>
         </div>
-        
-        <div className="max-h-[500px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+        <div className="max-h-[500px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
           {renderFormattedHistory(patient.history || '')}
         </div>
       </div>
 
+      {/* ========= Informações Sigilosas ========= */}
+      <div className="bg-slate-900 rounded-[32px] border border-slate-700 shadow-2xl overflow-hidden no-print">
+        <div className="px-6 lg:px-10 py-6 border-b border-slate-700 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center text-amber-400">
+              <FileLock2 size={22} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-white tracking-tight">Informações Sigilosas</h3>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                Anotações confidenciais — não constam no histórico geral
+              </p>
+            </div>
+          </div>
+          {sigilousUnlocked && (
+            <button
+              type="button"
+              onClick={() => { setSigilousUnlocked(false); setSigilousPasswordInput(''); }}
+              className="flex items-center space-x-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
+            >
+              <EyeOff size={14} />
+              <span>Ocultar</span>
+            </button>
+          )}
+        </div>
+
+        <div className="p-6 lg:p-10">
+          {!sigilousUnlocked ? (
+            /* ---- Tela de desbloqueio ---- */
+            <form onSubmit={handleUnlockSigilous} className="max-w-sm mx-auto space-y-6 py-6">
+              <div className="text-center space-y-3">
+                <div className="w-16 h-16 bg-amber-500/10 border-2 border-amber-500/30 rounded-3xl flex items-center justify-center mx-auto">
+                  <KeyRound size={28} className="text-amber-400" />
+                </div>
+                <p className="text-slate-300 text-sm font-bold leading-relaxed">
+                  Insira a <span className="text-amber-400">senha sigilosa</span> concedida pelo administrador para acessar e registrar informações confidenciais deste paciente.
+                </p>
+              </div>
+
+              {sigilousError && (
+                <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-2xl flex items-center space-x-2 text-red-400">
+                  <AlertCircle size={16} />
+                  <span className="text-xs font-bold">{sigilousError}</span>
+                </div>
+              )}
+
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <input
+                  type={sigilousPasswordVisible ? 'text' : 'password'}
+                  value={sigilousPasswordInput}
+                  onChange={e => setSigilousPasswordInput(e.target.value)}
+                  placeholder="Senha sigilosa"
+                  className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 placeholder:text-slate-600"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSigilousPasswordVisible(v => !v)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  {sigilousPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <button
+                type="submit"
+                className="w-full py-4 bg-amber-500 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-amber-400 transition-all active:scale-95 shadow-xl shadow-amber-500/20 flex items-center justify-center space-x-2"
+              >
+                <KeyRound size={16} />
+                <span>Desbloquear Área Sigilosa</span>
+              </button>
+            </form>
+          ) : (
+            /* ---- Área desbloqueada ---- */
+            <div className="space-y-8">
+              {/* Registros sigilosos anteriores */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 text-amber-400 text-[10px] font-black uppercase tracking-widest">
+                  <ShieldCheck size={14} />
+                  <span>Anotações sigilosas anteriores ({patientSigilousNotes.length})</span>
+                </div>
+                {patientSigilousNotes.length === 0 ? (
+                  <div className="py-10 text-center border border-dashed border-white/10 rounded-2xl">
+                    <FileLock2 size={32} className="mx-auto text-slate-600 mb-3" />
+                    <p className="text-slate-500 text-xs font-bold">Nenhuma anotação sigilosa registrada para este paciente.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                    {patientSigilousNotes.map(note => (
+                      <div key={note.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-5 py-3 bg-amber-500/5 border-b border-amber-500/10">
+                          <div className="flex items-center space-x-2">
+                            <Clock size={12} className="text-amber-400" />
+                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                              {new Date(note.createdAt).toLocaleDateString('pt-BR')} às {new Date(note.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {note.authorName}{note.authorSpecialty ? ` • ${note.authorSpecialty}` : ''}
+                          </span>
+                        </div>
+                        <div className="p-5 text-sm text-slate-300 font-medium leading-relaxed whitespace-pre-wrap">
+                          {note.note}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Nova anotação sigilosa */}
+              <div className="space-y-4 pt-6 border-t border-white/10">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
+                  <Plus size={12} />
+                  <span>Registrar nova anotação sigilosa</span>
+                </label>
+                <textarea
+                  value={newSigilousNote}
+                  onChange={e => setNewSigilousNote(e.target.value)}
+                  rows={4}
+                  className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-500/30 resize-none placeholder:text-slate-600"
+                  placeholder="Registre informações sigilosas relevantes sobre o paciente. Estas anotações só serão visíveis por profissionais com a senha sigilosa..."
+                />
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-slate-500 font-bold">Autor: {currentUser.name}</p>
+                  <button
+                    type="button"
+                    onClick={handleSaveSigilousNote}
+                    disabled={!newSigilousNote.trim() || isSavingNote}
+                    className="px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-400 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-2"
+                  >
+                    {isSavingNote ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                    <span>Salvar Anotação</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ========= Formulário de Evolução + Receituário ========= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 no-print">
         
         {/* Coluna Central: Evolução e Conduta */}
@@ -452,7 +635,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                   type="button"
                   onClick={() => handlePrint('exam')}
                   className="flex-1 sm:flex-none text-emerald-600 bg-emerald-50 px-3 lg:px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center space-x-2 transition-colors hover:bg-emerald-100"
-                  title="Imprimir Pedido de Exame"
                 >
                   <Printer size={14} />
                   <span>Imprimir</span>
@@ -554,7 +736,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                 </h3>
              </div>
 
-             {/* Busca Inteligente de Medicamentos */}
              <div className="mb-6 shrink-0 relative" ref={searchContainerRef}>
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Buscar Medicamento Cadastrado</label>
                 <div className="relative">
@@ -571,8 +752,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                     onFocus={() => setShowMedResults(true)}
                   />
                 </div>
-
-                {/* Dropdown de Resultados Inteligente */}
                 {showMedResults && medSearch.length > 0 && (
                   <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 border border-slate-100">
                     <div className="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
@@ -606,7 +785,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                 )}
              </div>
 
-             {/* Área de Edição da Receita */}
              <div className="flex-1 flex flex-col min-h-0">
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Conteúdo da Prescrição Atual</label>
                 <textarea 
@@ -626,7 +804,6 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                   <PlusCircle size={16} />
                   <span>Incluir Novo Medicamento</span>
                 </button>
-
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 text-[9px] font-black text-slate-500 uppercase">
                     <ShieldCheck size={14} className="text-blue-500" />

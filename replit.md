@@ -41,3 +41,15 @@ MedCore Pro is a React + Vite clinical management web app. It includes patient, 
 - Login possui link "Esqueci minha senha": verifica se o username existe localmente e chama `supabase.auth.resetPasswordForEmail` com e-mail sintético `username@medcore.local`. Se Supabase não estiver configurado, orienta o usuário a pedir ao admin.
 - `components/PatientSelfRegister.tsx`: formulário público (sem login) acessível pelo botão "Fazer meu Cadastro" da landing page. Coleta: Nome, CPF, Data de Nascimento, E-mail, Celular, Rua, Nº, Bairro, Cidade, CEP, Valor pago, Nome de quem realizou o depósito/PIX. Ao submeter, cria registro de paciente com `selfRegistered: true` diretamente no banco local (sincroniza com Supabase automaticamente). Campos opcionais de endereço detalhado foram adicionados ao tipo `Patient` (`streetName`, `streetNumber`, `neighborhood`, `city`, `zipCode`, `paymentValue`, `paymentSender`, `selfRegistered`).
 - Landing page tem dois botões: "Iniciar Atendimento" (equipe) e "Fazer meu Cadastro" (pacientes/clientes).
+
+## Informações Sigilosas (Restricted/Confidential Notes)
+
+- Novo tipo `SigilousNote` em `types.ts`: `{ id, patientId, authorId, authorName, authorSpecialty?, note, createdAt }`.
+- Campo `senhaAcesso?: string` adicionado ao tipo `User` — senha sigilosa definida pelo admin, armazenada em texto plano no registro do usuário.
+- `AppDatabase` agora inclui `sigilousNotes: SigilousNote[]` (persistência local + sincronização cloud via tabela `sigilous_notes` no Supabase).
+- **ConsultationRoom**: painel "Informações Sigilosas" (dark slate) aparece abaixo do histórico geral durante consultas. O profissional insere sua `senhaAcesso` (definida pelo admin); após desbloqueio, vê todas as notas sigilosas anteriores do paciente ordenadas por data (mais recentes primeiro) e pode registrar novas notas. As notas sigilosas NÃO aparecem no histórico geral (`patient.history`).
+- **DoctorRegistry**: na seção "Usuários do Sistema", ao editar um usuário, o admin pode definir/gerar a `senhaAcesso` do profissional. O campo sigiloso aparece em destaque âmbar. Um badge "Sigiloso Ativo" / "Sem Senha Sigilosa" indica visualmente o estado de cada usuário.
+- `storage.saveSigilousNoteToCloud()` envia notas sigilosas para a tabela `sigilous_notes` no Supabase em background.
+- O fluxo de adição: `onAddSigilousNote` callback em `App.tsx` persiste localmente em `db.sigilousNotes` e chama o sync cloud.
+- Histórico geral (`patient.history`) exibe blocos organizados por data com `[DATA: ...]` markers, parseados e exibidos em ordem cronológica reversa (mais recente primeiro).
+- Para criar a tabela `sigilous_notes` no Supabase, adicionar ao `supabase_schema.sql`: `CREATE TABLE sigilous_notes (id TEXT PRIMARY KEY, patient_id TEXT, author_id TEXT, author_name TEXT, author_specialty TEXT, note TEXT, created_at TIMESTAMPTZ);`

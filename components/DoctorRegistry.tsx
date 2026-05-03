@@ -125,15 +125,15 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
       : 'Usuário de acesso criado com sucesso!');
   };
 
-  // ========== USER MANAGEMENT (admin password reset) ==========
+  // ========== USER MANAGEMENT (admin password reset + senhaAcesso) ==========
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [userDraft, setUserDraft] = useState<{ password: string; role: UserRole; name: string }>({
-    password: '', role: UserRole.DOCTOR, name: ''
+  const [userDraft, setUserDraft] = useState<{ password: string; role: UserRole; name: string; senhaAcesso: string }>({
+    password: '', role: UserRole.DOCTOR, name: '', senhaAcesso: ''
   });
 
   const beginEditUser = (u: User) => {
     setEditingUserId(u.id);
-    setUserDraft({ password: u.password, role: u.role, name: u.name });
+    setUserDraft({ password: u.password, role: u.role, name: u.name, senhaAcesso: u.senhaAcesso || '' });
   };
 
   const saveUserEdit = () => {
@@ -143,12 +143,13 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
       return;
     }
     setUsers(prev => prev.map(u => u.id === editingUserId
-      ? { ...u, password: userDraft.password, role: userDraft.role, name: userDraft.name || u.name }
+      ? { ...u, password: userDraft.password, role: userDraft.role, name: userDraft.name || u.name, senhaAcesso: userDraft.senhaAcesso || u.senhaAcesso }
       : u
     ));
     setEditingUserId(null);
     alert('Credenciais do usuário atualizadas.');
   };
+
 
   const deleteUser = (u: User) => {
     if (u.username === 'admin') {
@@ -259,50 +260,87 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
                 </div>
 
                 {editing ? (
-                  <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 flex-1">
-                    <input
-                      type="text"
-                      placeholder="Nome"
-                      value={userDraft.name}
-                      onChange={e => setUserDraft({ ...userDraft, name: e.target.value })}
-                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Nova senha"
-                      value={userDraft.password}
-                      onChange={e => setUserDraft({ ...userDraft, password: e.target.value })}
-                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <select
-                      value={userDraft.role}
-                      onChange={e => setUserDraft({ ...userDraft, role: e.target.value as UserRole })}
-                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value={UserRole.DOCTOR}>Médico</option>
-                      <option value={UserRole.COLLABORATOR}>Colaborador</option>
-                      <option value={UserRole.ADMIN}>Administrador</option>
-                    </select>
-                    <button
-                      onClick={saveUserEdit}
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center space-x-1"
-                    >
-                      <Save size={14} /><span>Salvar</span>
-                    </button>
-                    <button
-                      onClick={() => setEditingUserId(null)}
-                      className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
-                    >
-                      Cancelar
-                    </button>
+                  <div className="flex flex-col gap-2 flex-1">
+                    <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Nome"
+                        value={userDraft.name}
+                        onChange={e => setUserDraft({ ...userDraft, name: e.target.value })}
+                        className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Nova senha de login"
+                        value={userDraft.password}
+                        onChange={e => setUserDraft({ ...userDraft, password: e.target.value })}
+                        className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <select
+                        value={userDraft.role}
+                        onChange={e => setUserDraft({ ...userDraft, role: e.target.value as UserRole })}
+                        className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value={UserRole.DOCTOR}>Médico</option>
+                        <option value={UserRole.COLLABORATOR}>Colaborador</option>
+                        <option value={UserRole.ADMIN}>Administrador</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
+                      <div className="flex items-center gap-2 flex-1 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                        <Lock size={13} className="text-amber-500 shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="Senha sigilosa (acesso a anotações restritas)"
+                          value={userDraft.senhaAcesso}
+                          onChange={e => setUserDraft({ ...userDraft, senhaAcesso: e.target.value })}
+                          className="flex-1 bg-transparent text-xs font-bold text-amber-800 placeholder:text-amber-400 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$';
+                            const pwd = Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+                            setUserDraft({ ...userDraft, senhaAcesso: pwd });
+                          }}
+                          className="text-[9px] font-black uppercase tracking-widest text-amber-600 hover:text-amber-800 border border-amber-300 rounded-lg px-2 py-1 bg-white hover:bg-amber-100 transition-all"
+                        >
+                          Gerar
+                        </button>
+                      </div>
+                      <button
+                        onClick={saveUserEdit}
+                        className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center space-x-1"
+                      >
+                        <Save size={14} /><span>Salvar</span>
+                      </button>
+                      <button
+                        onClick={() => setEditingUserId(null)}
+                        className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Badge da senha sigilosa */}
+                    {u.senhaAcesso ? (
+                      <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl">
+                        <Lock size={11} className="text-amber-500" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-amber-700">Sigiloso Ativo</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <Lock size={11} className="text-slate-300" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Sem Senha Sigilosa</span>
+                      </div>
+                    )}
                     <button
                       onClick={() => beginEditUser(u)}
                       className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all flex items-center space-x-1"
                     >
-                      <Key size={14} /><span>Alterar Senha / Papel</span>
+                      <Key size={14} /><span>Editar</span>
                     </button>
                     <button
                       onClick={() => deleteUser(u)}
