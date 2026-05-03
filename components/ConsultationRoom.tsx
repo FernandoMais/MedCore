@@ -23,7 +23,8 @@ import {
   EyeOff,
   FileLock2,
   Plus,
-  Send
+  Send,
+  ChevronDown
 } from 'lucide-react';
 import { Appointment, Patient, Doctor, Medication, SigilousNote, User } from '../types';
 import { getICDRecommendation } from '../services/gemini';
@@ -92,6 +93,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   const [sigilousError, setSigilousError] = useState('');
   const [newSigilousNote, setNewSigilousNote] = useState('');
   const [isSavingNote, setIsSavingNote] = useState(false);
+  const [showSigilousMenu, setShowSigilousMenu] = useState(false);
 
   const filteredMeds = medications.filter(m => 
     m.name.toLowerCase().includes(medSearch.toLowerCase()) ||
@@ -276,6 +278,20 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     .filter(n => n.patientId === patient?.id)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+  const patientHistoryEntries = (patient?.history || '')
+    .split(/\n{2,}/)
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .map(entry => {
+      const match = entry.match(/^\[DATA:\s*(.*?)\]\n?/);
+      const dateLabel = match?.[1] || '';
+      const timestamp = match?.[1]
+        ? new Date(match[1].replace(' às ', ' '))
+        : new Date(0);
+      return { dateLabel, timestamp, entry };
+    })
+    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
   const renderFormattedHistory = (historyText: string) => {
     if (!historyText) return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-300">
@@ -284,27 +300,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
       </div>
     );
 
-    // Parse history into blocks sorted by date
-    const blocks: { date: string; content: string }[] = [];
-    const parts = historyText.split(/(\[DATA: .*?\])/);
-    let currentDate = '';
-    let currentContent = '';
-    for (const part of parts) {
-      if (part.startsWith('[DATA:')) {
-        if (currentDate && currentContent.trim()) {
-          blocks.push({ date: currentDate, content: currentContent.trim() });
-        }
-        currentDate = part.replace(/[\[\]]/g, '');
-        currentContent = '';
-      } else {
-        currentContent += part;
-      }
-    }
-    if (currentDate && currentContent.trim()) {
-      blocks.push({ date: currentDate, content: currentContent.trim() });
-    }
-
-    if (blocks.length === 0) return (
+    if (patientHistoryEntries.length === 0) return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-300">
         <History size={48} className="mb-4 opacity-20" />
         <p className="text-xs font-black uppercase tracking-widest italic text-center">Nenhum registro prévio.</p>
@@ -313,14 +309,14 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
 
     return (
       <div className="space-y-4">
-        {blocks.map((block, index) => (
+        {patientHistoryEntries.map((block, index) => (
           <div key={index} className="border border-slate-100 rounded-2xl overflow-hidden">
             <div className="flex items-center space-x-3 px-5 py-3 bg-blue-50 border-b border-blue-100">
               <Clock size={13} className="text-blue-500 shrink-0" />
-              <span className="text-[10px] font-black text-blue-700 uppercase tracking-[0.15em]">{block.date}</span>
+              <span className="text-[10px] font-black text-blue-700 uppercase tracking-[0.15em]">{block.dateLabel}</span>
             </div>
             <div className="p-5 text-[11px] font-bold text-slate-700 whitespace-pre-wrap leading-relaxed bg-white">
-              {block.content}
+              {block.entry}
             </div>
           </div>
         ))}
@@ -505,115 +501,124 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
         </div>
 
         <div className="p-6 lg:p-10">
-          {!sigilousUnlocked ? (
-            /* ---- Tela de desbloqueio ---- */
-            <form onSubmit={handleUnlockSigilous} className="max-w-sm mx-auto space-y-6 py-6">
-              <div className="text-center space-y-3">
-                <div className="w-16 h-16 bg-amber-500/10 border-2 border-amber-500/30 rounded-3xl flex items-center justify-center mx-auto">
-                  <KeyRound size={28} className="text-amber-400" />
-                </div>
-                <p className="text-slate-300 text-sm font-bold leading-relaxed">
-                  Insira a <span className="text-amber-400">senha sigilosa</span> concedida pelo administrador para acessar e registrar informações confidenciais deste paciente.
-                </p>
-              </div>
+          <button
+            type="button"
+            onClick={() => setShowSigilousMenu(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-black text-xs uppercase tracking-[0.2em] hover:bg-white/10 transition-colors"
+          >
+            <span>Menu de informações sigilosas</span>
+            <ChevronDown size={16} className={`transition-transform ${showSigilousMenu ? 'rotate-180' : ''}`} />
+          </button>
 
-              {sigilousError && (
-                <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-2xl flex items-center space-x-2 text-red-400">
-                  <AlertCircle size={16} />
-                  <span className="text-xs font-bold">{sigilousError}</span>
+          {showSigilousMenu && (
+            <div className="mt-6 rounded-[28px] border border-white/10 bg-white/5 p-5 lg:p-6">
+              {!sigilousUnlocked ? (
+                <form onSubmit={handleUnlockSigilous} className="space-y-5">
+                  <div className="text-center space-y-3">
+                    <div className="w-16 h-16 bg-amber-500/10 border-2 border-amber-500/30 rounded-3xl flex items-center justify-center mx-auto">
+                      <KeyRound size={28} className="text-amber-400" />
+                    </div>
+                    <p className="text-slate-300 text-sm font-bold leading-relaxed">
+                      Insira a <span className="text-amber-400">senha sigilosa</span> concedida pelo administrador para acessar e registrar informações confidenciais deste paciente.
+                    </p>
+                  </div>
+
+                  {sigilousError && (
+                    <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-2xl flex items-center space-x-2 text-red-400">
+                      <AlertCircle size={16} />
+                      <span className="text-xs font-bold">{sigilousError}</span>
+                    </div>
+                  )}
+
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                    <input
+                      type={sigilousPasswordVisible ? 'text' : 'password'}
+                      value={sigilousPasswordInput}
+                      onChange={e => setSigilousPasswordInput(e.target.value)}
+                      placeholder="Senha sigilosa"
+                      className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 placeholder:text-slate-600"
+                      autoComplete="off"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSigilousPasswordVisible(v => !v)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                    >
+                      {sigilousPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-4 bg-amber-500 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-amber-400 transition-all active:scale-95 shadow-xl shadow-amber-500/20 flex items-center justify-center space-x-2"
+                  >
+                    <KeyRound size={16} />
+                    <span>Desbloquear Área Sigilosa</span>
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2 text-amber-400 text-[10px] font-black uppercase tracking-widest">
+                      <ShieldCheck size={14} />
+                      <span>Anotações sigilosas anteriores ({patientSigilousNotes.length})</span>
+                    </div>
+                    {patientSigilousNotes.length === 0 ? (
+                      <div className="py-10 text-center border border-dashed border-white/10 rounded-2xl">
+                        <FileLock2 size={32} className="mx-auto text-slate-600 mb-3" />
+                        <p className="text-slate-500 text-xs font-bold">Nenhuma anotação sigilosa registrada para este paciente.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-72 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                        {patientSigilousNotes.map(note => (
+                          <div key={note.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                            <div className="flex items-center justify-between px-5 py-3 bg-amber-500/5 border-b border-amber-500/10">
+                              <div className="flex items-center space-x-2">
+                                <Clock size={12} className="text-amber-400" />
+                                <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                                  {new Date(note.createdAt).toLocaleDateString('pt-BR')} às {new Date(note.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold text-slate-400">
+                                {note.authorName}{note.authorSpecialty ? ` • ${note.authorSpecialty}` : ''}
+                              </span>
+                            </div>
+                            <div className="p-5 text-sm text-slate-300 font-medium leading-relaxed whitespace-pre-wrap">
+                              {note.note}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4 pt-6 border-t border-white/10">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
+                      <Plus size={12} />
+                      <span>Registrar nova anotação sigilosa</span>
+                    </label>
+                    <textarea
+                      value={newSigilousNote}
+                      onChange={e => setNewSigilousNote(e.target.value)}
+                      rows={4}
+                      className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-500/30 resize-none placeholder:text-slate-600"
+                      placeholder="Registre informações sigilosas relevantes sobre o paciente. Estas anotações só serão visíveis por profissionais com a senha sigilosa..."
+                    />
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-slate-500 font-bold">Autor: {currentUser.name}</p>
+                      <button
+                        type="button"
+                        onClick={handleSaveSigilousNote}
+                        disabled={!newSigilousNote.trim() || isSavingNote}
+                        className="px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-400 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-2"
+                      >
+                        {isSavingNote ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                        <span>Salvar Anotação</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
-
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                <input
-                  type={sigilousPasswordVisible ? 'text' : 'password'}
-                  value={sigilousPasswordInput}
-                  onChange={e => setSigilousPasswordInput(e.target.value)}
-                  placeholder="Senha sigilosa"
-                  className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 placeholder:text-slate-600"
-                  autoComplete="off"
-                />
-                <button
-                  type="button"
-                  onClick={() => setSigilousPasswordVisible(v => !v)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-                >
-                  {sigilousPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <button
-                type="submit"
-                className="w-full py-4 bg-amber-500 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-amber-400 transition-all active:scale-95 shadow-xl shadow-amber-500/20 flex items-center justify-center space-x-2"
-              >
-                <KeyRound size={16} />
-                <span>Desbloquear Área Sigilosa</span>
-              </button>
-            </form>
-          ) : (
-            /* ---- Área desbloqueada ---- */
-            <div className="space-y-8">
-              {/* Registros sigilosos anteriores */}
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2 text-amber-400 text-[10px] font-black uppercase tracking-widest">
-                  <ShieldCheck size={14} />
-                  <span>Anotações sigilosas anteriores ({patientSigilousNotes.length})</span>
-                </div>
-                {patientSigilousNotes.length === 0 ? (
-                  <div className="py-10 text-center border border-dashed border-white/10 rounded-2xl">
-                    <FileLock2 size={32} className="mx-auto text-slate-600 mb-3" />
-                    <p className="text-slate-500 text-xs font-bold">Nenhuma anotação sigilosa registrada para este paciente.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-72 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                    {patientSigilousNotes.map(note => (
-                      <div key={note.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-                        <div className="flex items-center justify-between px-5 py-3 bg-amber-500/5 border-b border-amber-500/10">
-                          <div className="flex items-center space-x-2">
-                            <Clock size={12} className="text-amber-400" />
-                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
-                              {new Date(note.createdAt).toLocaleDateString('pt-BR')} às {new Date(note.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-bold text-slate-400">
-                            {note.authorName}{note.authorSpecialty ? ` • ${note.authorSpecialty}` : ''}
-                          </span>
-                        </div>
-                        <div className="p-5 text-sm text-slate-300 font-medium leading-relaxed whitespace-pre-wrap">
-                          {note.note}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Nova anotação sigilosa */}
-              <div className="space-y-4 pt-6 border-t border-white/10">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
-                  <Plus size={12} />
-                  <span>Registrar nova anotação sigilosa</span>
-                </label>
-                <textarea
-                  value={newSigilousNote}
-                  onChange={e => setNewSigilousNote(e.target.value)}
-                  rows={4}
-                  className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-500/30 resize-none placeholder:text-slate-600"
-                  placeholder="Registre informações sigilosas relevantes sobre o paciente. Estas anotações só serão visíveis por profissionais com a senha sigilosa..."
-                />
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] text-slate-500 font-bold">Autor: {currentUser.name}</p>
-                  <button
-                    type="button"
-                    onClick={handleSaveSigilousNote}
-                    disabled={!newSigilousNote.trim() || isSavingNote}
-                    className="px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-400 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-2"
-                  >
-                    {isSavingNote ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                    <span>Salvar Anotação</span>
-                  </button>
-                </div>
-              </div>
             </div>
           )}
         </div>
