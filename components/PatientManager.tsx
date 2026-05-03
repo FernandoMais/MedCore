@@ -24,7 +24,7 @@ import {
   FileDown,
   ExternalLink
 } from 'lucide-react';
-import { Patient, Gender, Doctor, MedicalFile, User as AppUser } from '../types';
+import { Patient, Gender, Doctor, MedicalFile, User as AppUser, SigilousNote } from '../types';
 import PatientEvolution from './PatientEvolution';
 import RestrictedHistory from './RestrictedHistory';
 
@@ -34,9 +34,10 @@ interface PatientManagerProps {
   doctors: Doctor[];
   isAdmin: boolean;
   currentUser: AppUser;
+  sigilousNotes?: SigilousNote[];
 }
 
-const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, doctors, isAdmin, currentUser }) => {
+const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, doctors, isAdmin, currentUser, sigilousNotes = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -165,29 +166,23 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
     ));
   };
 
-  const renderFormattedHistory = (historyText: string) => {
-    if (!historyText) return <p className="text-sm italic text-slate-400 p-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center">Nenhum histórico registrado no prontuário até o momento.</p>;
-    const parts = historyText.split(/(\[DATA: .*?\])/);
-    return (
-      <div className="space-y-4">
-        {parts.map((part, index) => {
-          if (part.startsWith('[DATA:')) {
-            return (
-              <div key={index} className="flex items-center space-x-3 pt-6 pb-2 border-b border-slate-100 mt-4 evolution-block-header">
-                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 no-print">
-                  <Clock size={16} />
-                </div>
-                <span className="text-xs font-black text-blue-600 uppercase tracking-[0.2em]">{part.replace(/[\[\]]/g, '')}</span>
-              </div>
-            );
-          }
-          return <p key={index} className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap pl-2">{part}</p>;
-        })}
-      </div>
-    );
-  };
+  const historyBlocks = (selectedPatient?.history || '')
+    .split(/(?=\[DATA:)/g)
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .map(entry => {
+      const dateLabel = entry.match(/^\[DATA:\s*(.*?)\]/)?.[1] || '';
+      const author = entry.match(/MÉDICO:\s*(.*)/)?.[1] || '';
+      const cleaned = entry
+        .replace(/^\[DATA:.*?\]\n?/, '')
+        .replace(/\n-+\n?$/, '')
+        .trim();
+      return { dateLabel, author, cleaned };
+    });
 
-  const restrictedEntries = selectedPatient?.history ? selectedPatient.history.split('--------------------------------------------------').filter(Boolean).slice(0, 20) : [];
+  const patientSigilousNotes = sigilousNotes
+    .filter(note => note.patientId === selectedPatient?.id)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -239,15 +234,54 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
                 </button>
               </div>
 
-              {showRestrictedPassword ? (
-                <RestrictedHistory patientId={selectedPatient.id} currentUserName={currentUser.name} entries={restrictedEntries} adminGeneratedPassword={restrictedPassword} />
-              ) : (
+              <div className="space-y-6">
                 <div className="space-y-4">
-                  <button type="button" className="px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-black uppercase tracking-widest" onClick={() => setShowRestrictedPassword(true)}>
-                    Ver histórico sigiloso
-                  </button>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Histórico completo</h3>
+                  {historyBlocks.length === 0 ? (
+                    <p className="text-sm italic text-slate-400 p-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center">
+                      Nenhum histórico registrado no prontuário até o momento.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {historyBlocks.map((block, index) => (
+                        <div key={index} className="rounded-3xl border border-slate-200 overflow-hidden">
+                          <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between gap-3">
+                            <span className="text-xs font-black text-blue-600 uppercase tracking-[0.2em]">{block.dateLabel}</span>
+                            <span className="text-[10px] font-bold text-slate-500 truncate">{block.author}</span>
+                          </div>
+                          <div className="p-5 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+                            {block.cleaned}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                <div className="pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-xs font-black uppercase tracking-widest"
+                    onClick={() => setShowRestrictedPassword(v => !v)}
+                  >
+                    {showRestrictedPassword ? 'Ocultar histórico sigiloso' : 'Ver histórico sigiloso'}
+                  </button>
+                  {showRestrictedPassword && (
+                    <div className="mt-4">
+                      <RestrictedHistory
+                        patientId={selectedPatient.id}
+                        currentUserName={currentUser.name}
+                        entries={patientSigilousNotes.map(note => {
+                          const when = new Date(note.createdAt).toLocaleDateString('pt-BR');
+                          const time = new Date(note.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                          return `[DATA: ${when} às ${time}]\n${note.authorName}\n${note.note}`;
+                        })}
+                        adminGeneratedPassword={restrictedPassword}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
