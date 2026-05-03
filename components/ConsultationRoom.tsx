@@ -279,16 +279,21 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const patientHistoryEntries = (patient?.history || '')
-    .split(/\n{2,}/)
+    .split(/(?=\[DATA:)/g)
     .map(entry => entry.trim())
     .filter(Boolean)
     .map(entry => {
-      const match = entry.match(/^\[DATA:\s*(.*?)\]\n?/);
-      const dateLabel = match?.[1] || '';
-      const timestamp = match?.[1]
-        ? new Date(match[1].replace(' às ', ' '))
+      const dateLine = entry.match(/^\[DATA:\s*(.*?)\]/);
+      const authorLine = entry.match(/MÉDICO:\s*(.*)/);
+      const dateLabel = dateLine?.[1] || '';
+      const timestamp = dateLine?.[1]
+        ? new Date(dateLine[1].replace(' às ', ' '))
         : new Date(0);
-      return { dateLabel, timestamp, entry };
+      const cleaned = entry
+        .replace(/^\[DATA:.*?\]\n?/, '')
+        .replace(/\n-+\n?$/, '')
+        .trim();
+      return { dateLabel, author: authorLine?.[1] || '', timestamp, entry: cleaned };
     })
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
@@ -314,6 +319,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             <div className="flex items-center space-x-3 px-5 py-3 bg-blue-50 border-b border-blue-100">
               <Clock size={13} className="text-blue-500 shrink-0" />
               <span className="text-[10px] font-black text-blue-700 uppercase tracking-[0.15em]">{block.dateLabel}</span>
+              <span className="text-[10px] font-bold text-slate-500 truncate">• {block.author}</span>
             </div>
             <div className="p-5 text-[11px] font-bold text-slate-700 whitespace-pre-wrap leading-relaxed bg-white">
               {block.entry}
@@ -475,14 +481,14 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
       </div>
 
       {/* ========= Informações Sigilosas ========= */}
-      <div className="bg-slate-900 rounded-[32px] border border-slate-700 shadow-2xl overflow-hidden no-print">
-        <div className="px-6 lg:px-10 py-6 border-b border-slate-700 flex items-center justify-between">
+      <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden no-print">
+        <div className="px-6 lg:px-10 py-6 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center text-amber-400">
+            <div className="w-12 h-12 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center text-amber-500">
               <FileLock2 size={22} />
             </div>
             <div>
-              <h3 className="text-lg font-black text-white tracking-tight">Informações Sigilosas</h3>
+              <h3 className="text-lg font-black text-slate-800 tracking-tight">Informações Sigilosas</h3>
               <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
                 Anotações confidenciais — não constam no histórico geral
               </p>
@@ -492,7 +498,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
             <button
               type="button"
               onClick={() => { setSigilousUnlocked(false); setSigilousPasswordInput(''); }}
-              className="flex items-center space-x-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:text-slate-700 text-[10px] font-black uppercase tracking-widest transition-colors"
             >
               <EyeOff size={14} />
               <span>Ocultar</span>
@@ -504,21 +510,21 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
           <button
             type="button"
             onClick={() => setShowSigilousMenu(v => !v)}
-            className="w-full flex items-center justify-between px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-black text-xs uppercase tracking-[0.2em] hover:bg-white/10 transition-colors"
+            className="w-full flex items-center justify-between px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-100 transition-colors"
           >
             <span>Menu de informações sigilosas</span>
             <ChevronDown size={16} className={`transition-transform ${showSigilousMenu ? 'rotate-180' : ''}`} />
           </button>
 
           {showSigilousMenu && (
-            <div className="mt-6 rounded-[28px] border border-white/10 bg-white/5 p-5 lg:p-6">
+            <div className="mt-6 rounded-[28px] border border-slate-200 bg-white p-5 lg:p-6">
               {!sigilousUnlocked ? (
                 <form onSubmit={handleUnlockSigilous} className="space-y-5">
                   <div className="text-center space-y-3">
-                    <div className="w-16 h-16 bg-amber-500/10 border-2 border-amber-500/30 rounded-3xl flex items-center justify-center mx-auto">
+                    <div className="w-16 h-16 bg-amber-50 border-2 border-amber-200 rounded-3xl flex items-center justify-center mx-auto">
                       <KeyRound size={28} className="text-amber-400" />
                     </div>
-                    <p className="text-slate-300 text-sm font-bold leading-relaxed">
+                    <p className="text-slate-600 text-sm font-bold leading-relaxed">
                       Insira a <span className="text-amber-400">senha sigilosa</span> concedida pelo administrador para acessar e registrar informações confidenciais deste paciente.
                     </p>
                   </div>
@@ -531,19 +537,19 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                   )}
 
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input
                       type={sigilousPasswordVisible ? 'text' : 'password'}
                       value={sigilousPasswordInput}
                       onChange={e => setSigilousPasswordInput(e.target.value)}
                       placeholder="Senha sigilosa"
-                      className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 placeholder:text-slate-600"
+                      className="w-full pl-12 pr-12 py-4 bg-white border border-slate-200 rounded-2xl text-slate-800 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 placeholder:text-slate-400"
                       autoComplete="off"
                     />
                     <button
                       type="button"
                       onClick={() => setSigilousPasswordVisible(v => !v)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                     >
                       {sigilousPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -569,21 +575,21 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                         <p className="text-slate-500 text-xs font-bold">Nenhuma anotação sigilosa registrada para este paciente.</p>
                       </div>
                     ) : (
-                      <div className="space-y-3 max-h-72 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                      <div className="space-y-3 max-h-72 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                         {patientSigilousNotes.map(note => (
-                          <div key={note.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-                            <div className="flex items-center justify-between px-5 py-3 bg-amber-500/5 border-b border-amber-500/10">
+                          <div key={note.id} className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden">
+                            <div className="flex items-center justify-between px-5 py-3 bg-amber-50 border-b border-amber-100">
                               <div className="flex items-center space-x-2">
-                                <Clock size={12} className="text-amber-400" />
-                                <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                                <Clock size={12} className="text-amber-500" />
+                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">
                                   {new Date(note.createdAt).toLocaleDateString('pt-BR')} às {new Date(note.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               </div>
-                              <span className="text-[10px] font-bold text-slate-400">
+                              <span className="text-[10px] font-bold text-slate-500">
                                 {note.authorName}{note.authorSpecialty ? ` • ${note.authorSpecialty}` : ''}
                               </span>
                             </div>
-                            <div className="p-5 text-sm text-slate-300 font-medium leading-relaxed whitespace-pre-wrap">
+                            <div className="p-5 text-sm text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">
                               {note.note}
                             </div>
                           </div>
@@ -601,7 +607,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                       value={newSigilousNote}
                       onChange={e => setNewSigilousNote(e.target.value)}
                       rows={4}
-                      className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm outline-none focus:ring-2 focus:ring-amber-500/30 resize-none placeholder:text-slate-600"
+                      className="w-full p-5 bg-white border border-slate-200 rounded-2xl text-slate-800 font-medium text-sm outline-none focus:ring-2 focus:ring-amber-500/30 resize-none placeholder:text-slate-400"
                       placeholder="Registre informações sigilosas relevantes sobre o paciente. Estas anotações só serão visíveis por profissionais com a senha sigilosa..."
                     />
                     <div className="flex items-center justify-between">
@@ -716,6 +722,22 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
               </div>
 
               <div className="pt-6 border-t border-slate-100 flex flex-col space-y-4">
+                <div className="bg-white border border-slate-200 rounded-[28px] p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-700">Informações Sigilosas</h4>
+                      <p className="text-[10px] font-medium text-slate-500">Acesso restrito para notas confidenciais do paciente.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSigilousMenu(v => !v)}
+                      className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all flex items-center space-x-2"
+                    >
+                      <FileLock2 size={14} />
+                      <span>{showSigilousMenu ? 'Ocultar' : 'Abrir'}</span>
+                    </button>
+                  </div>
+                </div>
                 <button 
                   type="button"
                   onClick={handleFinalize}

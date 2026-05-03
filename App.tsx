@@ -214,7 +214,7 @@ const App: React.FC = () => {
           setDb(prev => {
             const updatedPatients = (prev.patients || []).map(p => 
               p.id === appointment.patientId 
-                ? { ...p, history: newEntry + (p.history || '') } 
+                ? { ...p, history: (p.history || '') + newEntry } 
                 : p
             );
             
