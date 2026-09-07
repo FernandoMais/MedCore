@@ -1,5 +1,15 @@
 
-import { Patient, Doctor, Appointment, MedicalRecord, User, UserRole, Medication, SigilousNote } from '../types';
+import {
+  Patient,
+  Doctor,
+  Appointment,
+  MedicalRecord,
+  User,
+  UserRole,
+  Medication,
+  SigilousNote,
+  FinancialData,
+} from '../types';
 import { MOCK_PATIENTS, MOCK_DOCTORS, MOCK_APPOINTMENTS } from '../constants';
 import { supabase } from './supabase';
 
@@ -13,14 +23,99 @@ export interface AppDatabase {
   medicalRecords: MedicalRecord[];
   medications: Medication[];
   sigilousNotes: SigilousNote[];
+  financial: FinancialData;
   lastBackup?: string;
 }
 
+const CLINIC_ID = 'clinic-demo-001';
+
+const dateFromToday = (offset: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return date.toISOString().split('T')[0];
+};
+
+const DEFAULT_FINANCIAL: FinancialData = {
+  categories: [
+    { id: 'fc-consultas', clinicId: CLINIC_ID, name: 'Consultas', type: 'receita', color: '#2563eb', active: true },
+    { id: 'fc-procedimentos', clinicId: CLINIC_ID, name: 'Procedimentos', type: 'receita', color: '#0d9488', active: true },
+    { id: 'fc-convenios', clinicId: CLINIC_ID, name: 'Convênios', type: 'receita', color: '#7c3aed', active: true },
+    { id: 'fc-insumos', clinicId: CLINIC_ID, name: 'Insumos e materiais', type: 'despesa', color: '#f59e0b', active: true },
+    { id: 'fc-operacional', clinicId: CLINIC_ID, name: 'Despesas operacionais', type: 'despesa', color: '#ef4444', active: true },
+    { id: 'fc-pessoal', clinicId: CLINIC_ID, name: 'Pessoal e repasses', type: 'despesa', color: '#db2777', active: true },
+  ],
+  costCenters: [
+    { id: 'cc-clinica', clinicId: CLINIC_ID, name: 'Operação da clínica', description: 'Custos gerais da unidade', active: true },
+    { id: 'cc-consultorios', clinicId: CLINIC_ID, name: 'Consultórios', description: 'Atendimento e salas', active: true },
+    { id: 'cc-administrativo', clinicId: CLINIC_ID, name: 'Administrativo', description: 'Gestão e backoffice', active: true },
+  ],
+  paymentMethods: [
+    { id: 'pm-pix', clinicId: CLINIC_ID, name: 'PIX', kind: 'ambos', feePercent: 0, active: true },
+    { id: 'pm-credit', clinicId: CLINIC_ID, name: 'Cartão de crédito', kind: 'entrada', feePercent: 2.99, active: true },
+    { id: 'pm-debit', clinicId: CLINIC_ID, name: 'Cartão de débito', kind: 'entrada', feePercent: 1.49, active: true },
+    { id: 'pm-cash', clinicId: CLINIC_ID, name: 'Dinheiro', kind: 'entrada', feePercent: 0, active: true },
+    { id: 'pm-transfer', clinicId: CLINIC_ID, name: 'Transferência bancária', kind: 'ambos', feePercent: 0, active: true },
+  ],
+  bankAccounts: [
+    { id: 'ba-main', clinicId: CLINIC_ID, name: 'Conta principal', bank: 'Banco MedCore', agency: '0001', accountNumber: '12345-6', kind: 'banco', openingBalance: 18450, active: true },
+    { id: 'ba-cash', clinicId: CLINIC_ID, name: 'Caixa recepção', kind: 'caixa', openingBalance: 850, active: true },
+  ],
+  insurancePlans: [
+    { id: 'ip-unimed', clinicId: CLINIC_ID, name: 'Unimed', operator: 'Unimed Nacional', code: 'UNIMED-001', paymentTermDays: 30, active: true },
+    { id: 'ip-bradesco', clinicId: CLINIC_ID, name: 'Bradesco Saúde', operator: 'Bradesco Saúde', code: 'BRAD-001', paymentTermDays: 45, active: true },
+    { id: 'ip-particular', clinicId: CLINIC_ID, name: 'Particular', operator: 'Atendimento particular', paymentTermDays: 0, active: true },
+  ],
+  transactions: [
+    {
+      id: 'ft-001', clinicId: CLINIC_ID, type: 'receita', status: 'pago', description: 'Consulta cardiológica — João Silva',
+      amount: 350, dueDate: dateFromToday(-3), paidDate: dateFromToday(-3), patientId: '1', doctorId: 'd1',
+      appointmentId: 'a1', categoryId: 'fc-consultas', costCenterId: 'cc-consultorios', paymentMethodId: 'pm-pix',
+      accountId: 'ba-main', createdAt: dateFromToday(-3),
+    },
+    {
+      id: 'ft-002', clinicId: CLINIC_ID, type: 'receita', status: 'pendente', description: 'Consulta pediátrica — Carlos Santos',
+      amount: 280, dueDate: dateFromToday(4), patientId: '3', doctorId: 'd2',
+      categoryId: 'fc-consultas', costCenterId: 'cc-consultorios', paymentMethodId: 'pm-credit', accountId: 'ba-main', createdAt: dateFromToday(-1),
+    },
+    {
+      id: 'ft-003', clinicId: CLINIC_ID, type: 'receita', status: 'vencido', description: 'Repasse de convênio — Unimed',
+      amount: 1280, dueDate: dateFromToday(-12), insurancePlanId: 'ip-unimed',
+      categoryId: 'fc-convenios', costCenterId: 'cc-clinica', accountId: 'ba-main', createdAt: dateFromToday(-35),
+    },
+    {
+      id: 'ft-004', clinicId: CLINIC_ID, type: 'despesa', status: 'pago', description: 'Materiais descartáveis',
+      amount: 430, dueDate: dateFromToday(-5), paidDate: dateFromToday(-5), categoryId: 'fc-insumos',
+      costCenterId: 'cc-consultorios', paymentMethodId: 'pm-transfer', accountId: 'ba-main', createdAt: dateFromToday(-5),
+    },
+    {
+      id: 'ft-005', clinicId: CLINIC_ID, type: 'despesa', status: 'pendente', description: 'Aluguel da unidade',
+      amount: 6200, dueDate: dateFromToday(8), categoryId: 'fc-operacional',
+      costCenterId: 'cc-clinica', accountId: 'ba-main', createdAt: dateFromToday(-2),
+    },
+  ],
+  repasses: [
+    { id: 'rp-001', clinicId: CLINIC_ID, doctorId: 'd1', referenceMonth: dateFromToday(-4).slice(0, 7), grossAmount: 350, percentage: 60, amount: 210, status: 'previsto', dueDate: dateFromToday(10) },
+  ],
+  cashClosures: [
+    { id: 'cash-001', clinicId: CLINIC_ID, accountId: 'ba-cash', date: dateFromToday(0), openingBalance: 850, expectedBalance: 850, countedBalance: 850, difference: 0, responsibleName: 'Recepção', status: 'aberto' },
+  ],
+  reconciliations: [
+    { id: 'br-001', clinicId: CLINIC_ID, accountId: 'ba-main', date: dateFromToday(-1), description: 'PIX — João Silva', amount: 350, type: 'receita', status: 'conciliado', transactionId: 'ft-001' },
+    { id: 'br-002', clinicId: CLINIC_ID, accountId: 'ba-main', date: dateFromToday(-1), description: 'Tarifa bancária', amount: 18.9, type: 'despesa', status: 'pendente' },
+  ],
+  billingRecords: [
+    { id: 'bill-001', clinicId: CLINIC_ID, referenceMonth: dateFromToday(-4).slice(0, 7), insurancePlanId: 'ip-unimed', totalAmount: 1280, dueDate: dateFromToday(18), status: 'enviado', submittedAt: dateFromToday(-2), notes: 'Lote mensal de consultas' },
+  ],
+  settings: [
+    { clinicId: CLINIC_ID, clinicName: 'Clínica MedCore', document: '12.345.678/0001-90', currency: 'BRL', defaultPaymentMethodId: 'pm-pix', defaultAccountId: 'ba-main', allowNegativeCash: false, sendPaymentNotifications: true },
+  ],
+};
+
 const DEFAULT_DB: AppDatabase = {
   users: [
-    { id: 'u1', username: 'admin', password: '123', name: 'Administrador MedCore', role: UserRole.ADMIN },
-    { id: 'u2', username: 'ricardo', password: '123', name: 'Dr. Ricardo Souza', role: UserRole.DOCTOR, doctorId: 'd1' },
-    { id: 'u3', username: 'ana', password: '123', name: 'Dra. Ana Beatriz', role: UserRole.DOCTOR, doctorId: 'd2' }
+    { id: 'u1', username: 'admin', password: '123', name: 'Administrador MedCore', role: UserRole.ADMIN, clinicId: CLINIC_ID },
+    { id: 'u2', username: 'ricardo', password: '123', name: 'Dr. Ricardo Souza', role: UserRole.DOCTOR, doctorId: 'd1', clinicId: CLINIC_ID },
+    { id: 'u3', username: 'ana', password: '123', name: 'Dra. Ana Beatriz', role: UserRole.DOCTOR, doctorId: 'd2', clinicId: CLINIC_ID }
   ],
   patients: MOCK_PATIENTS,
   doctors: MOCK_DOCTORS,
@@ -31,6 +126,7 @@ const DEFAULT_DB: AppDatabase = {
     { id: 'm2', name: 'Dipirona', dosage: '500mg', posology: '1 comprimido se dor ou febre', period: 'Até de 6 em 6 horas', purpose: 'Analgésico e Antitérmico', manufacturer: 'Medley' }
   ],
   sigilousNotes: [],
+  financial: DEFAULT_FINANCIAL,
 };
 
 export const storage = {
@@ -52,6 +148,23 @@ export const storage = {
           medicalRecords: Array.isArray(parsed.medicalRecords) ? parsed.medicalRecords : DEFAULT_DB.medicalRecords,
           medications: Array.isArray(parsed.medications) ? parsed.medications : DEFAULT_DB.medications,
           sigilousNotes: Array.isArray(parsed.sigilousNotes) ? parsed.sigilousNotes : DEFAULT_DB.sigilousNotes,
+          financial: parsed.financial && typeof parsed.financial === 'object'
+            ? {
+                ...DEFAULT_FINANCIAL,
+                ...parsed.financial,
+                transactions: Array.isArray(parsed.financial.transactions) ? parsed.financial.transactions : DEFAULT_FINANCIAL.transactions,
+                categories: Array.isArray(parsed.financial.categories) ? parsed.financial.categories : DEFAULT_FINANCIAL.categories,
+                costCenters: Array.isArray(parsed.financial.costCenters) ? parsed.financial.costCenters : DEFAULT_FINANCIAL.costCenters,
+                paymentMethods: Array.isArray(parsed.financial.paymentMethods) ? parsed.financial.paymentMethods : DEFAULT_FINANCIAL.paymentMethods,
+                bankAccounts: Array.isArray(parsed.financial.bankAccounts) ? parsed.financial.bankAccounts : DEFAULT_FINANCIAL.bankAccounts,
+                insurancePlans: Array.isArray(parsed.financial.insurancePlans) ? parsed.financial.insurancePlans : DEFAULT_FINANCIAL.insurancePlans,
+                repasses: Array.isArray(parsed.financial.repasses) ? parsed.financial.repasses : DEFAULT_FINANCIAL.repasses,
+                cashClosures: Array.isArray(parsed.financial.cashClosures) ? parsed.financial.cashClosures : DEFAULT_FINANCIAL.cashClosures,
+                reconciliations: Array.isArray(parsed.financial.reconciliations) ? parsed.financial.reconciliations : DEFAULT_FINANCIAL.reconciliations,
+                billingRecords: Array.isArray(parsed.financial.billingRecords) ? parsed.financial.billingRecords : DEFAULT_FINANCIAL.billingRecords,
+                settings: Array.isArray(parsed.financial.settings) ? parsed.financial.settings : DEFAULT_FINANCIAL.settings,
+              }
+            : DEFAULT_DB.financial,
           lastBackup: parsed.lastBackup
         };
       }
@@ -76,6 +189,29 @@ export const storage = {
       assignIfNonEmpty('users', await supabase.from('users').select('*'));
       assignIfNonEmpty('medications', await supabase.from('medications').select('*'));
       assignIfNonEmpty('sigilousNotes', await supabase.from('sigilous_notes').select('*'));
+      const financialTables: Record<string, keyof FinancialData> = {
+        financial_transactions: 'transactions',
+        financial_categories: 'categories',
+        financial_cost_centers: 'costCenters',
+        financial_payment_methods: 'paymentMethods',
+        financial_bank_accounts: 'bankAccounts',
+        financial_insurance_plans: 'insurancePlans',
+        financial_repasses: 'repasses',
+        financial_cash_closures: 'cashClosures',
+        financial_reconciliations: 'reconciliations',
+        financial_billing_records: 'billingRecords',
+        financial_settings: 'settings',
+      };
+      const financial = { ...DEFAULT_FINANCIAL } as FinancialData;
+      for (const [table, key] of Object.entries(financialTables)) {
+        const result = await supabase.from(table).select('*');
+        if (!result.error && Array.isArray(result.data) && result.data.length > 0) {
+          (financial[key] as any) = result.data;
+        }
+      }
+      if (Object.values(financial).some(value => Array.isArray(value) && value.length > 0)) {
+        cloudData.financial = financial;
+      }
 
       return cloudData;
     } catch (e) {
@@ -100,6 +236,25 @@ export const storage = {
       if (db.users?.length > 0) await supabase.from('users').upsert(db.users);
       if (db.medications?.length > 0) await supabase.from('medications').upsert(db.medications);
       if (db.sigilousNotes?.length > 0) await supabase.from('sigilous_notes').upsert(db.sigilousNotes);
+      if (db.financial) {
+        const financialTables: Record<keyof FinancialData, string> = {
+          transactions: 'financial_transactions',
+          categories: 'financial_categories',
+          costCenters: 'financial_cost_centers',
+          paymentMethods: 'financial_payment_methods',
+          bankAccounts: 'financial_bank_accounts',
+          insurancePlans: 'financial_insurance_plans',
+          repasses: 'financial_repasses',
+          cashClosures: 'financial_cash_closures',
+          reconciliations: 'financial_reconciliations',
+          billingRecords: 'financial_billing_records',
+          settings: 'financial_settings',
+        };
+        for (const [key, table] of Object.entries(financialTables)) {
+          const rows = db.financial[key as keyof FinancialData];
+          if (Array.isArray(rows) && rows.length > 0) await supabase.from(table).upsert(rows);
+        }
+      }
     } catch (e) {
       console.error("Erro na sincronização cloud:", e);
       throw e;

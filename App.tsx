@@ -26,10 +26,11 @@ import {
   BarChart3,
   PieChart,
   Pill,
+  Wallet,
   Menu,
   X
 } from 'lucide-react';
-import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus, Medication, SigilousNote } from './types';
+import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus, Medication, SigilousNote, FinanceSection } from './types';
 import { storage, AppDatabase } from './services/storage';
 import Dashboard from './components/Dashboard';
 import PatientManager from './components/PatientManager';
@@ -44,14 +45,16 @@ import MedicationRegistry from './components/MedicationRegistry';
 import PatientSelfRegister from './components/PatientSelfRegister';
 import PatientLogin from './components/PatientLogin';
 import PatientPortal from './components/PatientPortal';
+import FinancialModule from './components/FinancialModule';
 
-type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups' | 'reports' | 'medications';
+type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups' | 'reports' | 'medications' | 'finance';
 type AppScreen = 'landing' | 'login' | 'self-register' | 'app';
 
 const App: React.FC = () => {
   const [db, setDb] = useState<AppDatabase>(storage.initLocal());
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [financeSection, setFinanceSection] = useState<FinanceSection>('dashboard');
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline'>('offline');
@@ -320,6 +323,28 @@ const App: React.FC = () => {
     );
   };
 
+  const financialNavigation: Array<{ section: FinanceSection; label: string }> = [
+    { section: 'dashboard', label: 'Dashboard Financeiro' },
+    { section: 'receivable', label: 'Contas a Receber' },
+    { section: 'payable', label: 'Contas a Pagar' },
+    { section: 'cashflow', label: 'Fluxo de Caixa' },
+    { section: 'income', label: 'Receitas' },
+    { section: 'expenses', label: 'Despesas' },
+    { section: 'payments', label: 'Pagamentos' },
+    { section: 'repasses', label: 'Repasses aos Profissionais' },
+    { section: 'cash', label: 'Caixa' },
+    { section: 'bank-accounts', label: 'Contas Bancárias' },
+    { section: 'categories', label: 'Categorias Financeiras' },
+    { section: 'cost-centers', label: 'Centros de Custo' },
+    { section: 'payment-methods', label: 'Formas de Pagamento' },
+    { section: 'insurance', label: 'Convênios e Planos' },
+    { section: 'billing', label: 'Faturamento' },
+    { section: 'reconciliation', label: 'Conciliação Bancária' },
+    { section: 'delinquency', label: 'Inadimplência' },
+    { section: 'reports', label: 'Relatórios Financeiros' },
+    { section: 'settings', label: 'Configurações Financeiras' },
+  ];
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans relative">
       {/* Mobile Sidebar Overlay */}
@@ -362,6 +387,44 @@ const App: React.FC = () => {
           <SidebarItem view="agenda" icon={<Calendar size={18} />} label="Minha Agenda" />
           <SidebarItem view="patients" icon={<Users size={18} />} label="Meus Pacientes" />
           <SidebarItem view="medications" icon={<Pill size={18} />} label="Medicamentos" />
+          <div className="pt-3 mt-3 border-t border-slate-100">
+            <button
+              onClick={() => {
+                setCurrentView('finance');
+                setFinanceSection('dashboard');
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                currentView === 'finance'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-blue-600'
+              }`}
+            >
+              <Wallet size={18} className={currentView === 'finance' ? 'text-white' : 'text-slate-400 group-hover:text-blue-600'} />
+              <span className="font-black text-sm tracking-tight uppercase">Financeiro</span>
+            </button>
+            {currentView === 'finance' && (
+              <div className="mt-2 ml-2 pl-3 border-l-2 border-blue-100 space-y-0.5">
+                {financialNavigation.map(item => (
+                  <button
+                    key={item.section}
+                    onClick={() => {
+                      setCurrentView('finance');
+                      setFinanceSection(item.section);
+                      setIsSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-colors ${
+                      financeSection === item.section
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-slate-400 hover:bg-slate-50 hover:text-blue-600'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <SidebarItem view="reports" icon={<BarChart3 size={18} />} label="Relatórios" adminOnly />
           <SidebarItem view="doctors" icon={<Heart size={18} />} label="Corpo Clínico" adminOnly />
           <SidebarItem view="backups" icon={<Download size={18} />} label="Exportar Dados" adminOnly />
@@ -477,6 +540,18 @@ const App: React.FC = () => {
               appointments={db.appointments || []} 
               patients={db.patients || []} 
               doctors={db.doctors || []} 
+            />
+          )}
+          {currentView === 'finance' && (
+            <FinancialModule
+              section={financeSection}
+              clinicId={currentUser.clinicId || 'clinic-demo-001'}
+              currentUser={currentUser}
+              patients={filteredPatients}
+              doctors={db.doctors || []}
+              appointments={filteredAppointments}
+              data={db.financial}
+              onUpdate={(financial) => setDb(prev => ({ ...prev, financial }))}
             />
           )}
           {currentView === 'doctors' && (

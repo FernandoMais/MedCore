@@ -13,6 +13,7 @@ export interface User {
   name: string;
   role: UserRole;
   doctorId?: string;
+  clinicId?: string;
   senhaAcesso?: string; // Senha sigilosa definida pelo admin para acesso a informações restritas
 }
 
@@ -147,4 +148,176 @@ export interface SigilousNote {
   authorSpecialty?: string;
   note: string;
   createdAt: string; // ISO string
+}
+
+export type FinanceSection =
+  | 'dashboard'
+  | 'receivable'
+  | 'payable'
+  | 'cashflow'
+  | 'income'
+  | 'expenses'
+  | 'payments'
+  | 'repasses'
+  | 'cash'
+  | 'bank-accounts'
+  | 'categories'
+  | 'cost-centers'
+  | 'payment-methods'
+  | 'insurance'
+  | 'billing'
+  | 'reconciliation'
+  | 'delinquency'
+  | 'reports'
+  | 'settings';
+
+export type FinancialEntryType = 'receita' | 'despesa';
+export type FinancialStatus = 'pendente' | 'pago' | 'vencido' | 'cancelado';
+
+export interface FinancialTransaction {
+  id: string;
+  clinicId: string;
+  type: FinancialEntryType;
+  status: FinancialStatus;
+  description: string;
+  amount: number;
+  dueDate: string;
+  paidDate?: string;
+  patientId?: string;
+  doctorId?: string;
+  appointmentId?: string;
+  categoryId?: string;
+  costCenterId?: string;
+  paymentMethodId?: string;
+  accountId?: string;
+  insurancePlanId?: string;
+  documentNumber?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface FinancialCategory {
+  id: string;
+  clinicId: string;
+  name: string;
+  type: FinancialEntryType | 'ambos';
+  color: string;
+  active: boolean;
+}
+
+export interface CostCenter {
+  id: string;
+  clinicId: string;
+  name: string;
+  description?: string;
+  active: boolean;
+}
+
+export interface PaymentMethod {
+  id: string;
+  clinicId: string;
+  name: string;
+  kind: 'entrada' | 'saida' | 'ambos';
+  feePercent?: number;
+  active: boolean;
+}
+
+export interface BankAccount {
+  id: string;
+  clinicId: string;
+  name: string;
+  bank?: string;
+  agency?: string;
+  accountNumber?: string;
+  kind: 'banco' | 'caixa';
+  openingBalance: number;
+  active: boolean;
+}
+
+export interface InsurancePlan {
+  id: string;
+  clinicId: string;
+  name: string;
+  operator: string;
+  code?: string;
+  paymentTermDays: number;
+  active: boolean;
+}
+
+export interface ProfessionalRepass {
+  id: string;
+  clinicId: string;
+  doctorId: string;
+  referenceMonth: string;
+  grossAmount: number;
+  percentage?: number;
+  amount: number;
+  status: 'previsto' | 'aprovado' | 'pago';
+  dueDate: string;
+  paidDate?: string;
+  notes?: string;
+}
+
+export interface CashClosure {
+  id: string;
+  clinicId: string;
+  accountId: string;
+  date: string;
+  openingBalance: number;
+  expectedBalance: number;
+  countedBalance: number;
+  difference: number;
+  responsibleName: string;
+  status: 'aberto' | 'fechado';
+  notes?: string;
+}
+
+export interface BankReconciliation {
+  id: string;
+  clinicId: string;
+  accountId: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: FinancialEntryType;
+  status: 'pendente' | 'conciliado' | 'divergente';
+  transactionId?: string;
+}
+
+export interface BillingRecord {
+  id: string;
+  clinicId: string;
+  referenceMonth: string;
+  patientId?: string;
+  insurancePlanId?: string;
+  totalAmount: number;
+  submittedAt?: string;
+  dueDate: string;
+  status: 'rascunho' | 'enviado' | 'pago' | 'glosa';
+  notes?: string;
+}
+
+export interface FinancialSettings {
+  clinicId: string;
+  clinicName: string;
+  document?: string;
+  currency: string;
+  defaultPaymentMethodId?: string;
+  defaultAccountId?: string;
+  allowNegativeCash: boolean;
+  sendPaymentNotifications: boolean;
+}
+
+export interface FinancialData {
+  transactions: FinancialTransaction[];
+  categories: FinancialCategory[];
+  costCenters: CostCenter[];
+  paymentMethods: PaymentMethod[];
+  bankAccounts: BankAccount[];
+  insurancePlans: InsurancePlan[];
+  repasses: ProfessionalRepass[];
+  cashClosures: CashClosure[];
+  reconciliations: BankReconciliation[];
+  billingRecords: BillingRecord[];
+  settings: FinancialSettings[];
 }
