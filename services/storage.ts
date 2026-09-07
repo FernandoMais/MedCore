@@ -29,6 +29,12 @@ export interface AppDatabase {
 
 const CLINIC_ID = 'clinic-demo-001';
 
+const normalizeAppointments = (appointments: Appointment[]): Appointment[] => appointments.map(appointment => ({
+  ...appointment,
+  serviceValue: appointment.serviceValue ?? (appointment.type === 'Procedimento' ? 500 : appointment.type === 'Retorno' ? 180 : 350),
+  repassRule: appointment.repassRule ?? { type: 'percentage', value: 60 },
+}));
+
 const dateFromToday = (offset: number) => {
   const date = new Date();
   date.setDate(date.getDate() + offset);
@@ -94,7 +100,7 @@ const DEFAULT_FINANCIAL: FinancialData = {
     },
   ],
   repasses: [
-    { id: 'rp-001', clinicId: CLINIC_ID, doctorId: 'd1', referenceMonth: dateFromToday(-4).slice(0, 7), grossAmount: 350, percentage: 60, amount: 210, status: 'previsto', dueDate: dateFromToday(10) },
+    { id: 'rp-001', clinicId: CLINIC_ID, doctorId: 'd1', patientId: '1', appointmentId: 'a1', referenceMonth: dateFromToday(-4).slice(0, 7), grossAmount: 350, percentage: 60, amount: 210, status: 'previsto', dueDate: dateFromToday(10) },
   ],
   cashClosures: [
     { id: 'cash-001', clinicId: CLINIC_ID, accountId: 'ba-cash', date: dateFromToday(0), openingBalance: 850, expectedBalance: 850, countedBalance: 850, difference: 0, responsibleName: 'Recepção', status: 'aberto' },
@@ -144,7 +150,7 @@ export const storage = {
           users: finalUsers,
           patients: Array.isArray(parsed.patients) ? parsed.patients : DEFAULT_DB.patients,
           doctors: Array.isArray(parsed.doctors) ? parsed.doctors : DEFAULT_DB.doctors,
-          appointments: Array.isArray(parsed.appointments) ? parsed.appointments : DEFAULT_DB.appointments,
+          appointments: Array.isArray(parsed.appointments) ? normalizeAppointments(parsed.appointments) : DEFAULT_DB.appointments,
           medicalRecords: Array.isArray(parsed.medicalRecords) ? parsed.medicalRecords : DEFAULT_DB.medicalRecords,
           medications: Array.isArray(parsed.medications) ? parsed.medications : DEFAULT_DB.medications,
           sigilousNotes: Array.isArray(parsed.sigilousNotes) ? parsed.sigilousNotes : DEFAULT_DB.sigilousNotes,
@@ -211,6 +217,9 @@ export const storage = {
       }
       if (Object.values(financial).some(value => Array.isArray(value) && value.length > 0)) {
         cloudData.financial = financial;
+      }
+      if (Array.isArray(cloudData.appointments)) {
+        cloudData.appointments = normalizeAppointments(cloudData.appointments);
       }
 
       return cloudData;

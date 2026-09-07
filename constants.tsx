@@ -95,6 +95,8 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     time: '09:00',
     type: 'Consulta',
     status: AppointmentStatus.CONFIRMED,
-    room: 'Consultório 01'
+    room: 'Consultório 01',
+    serviceValue: 350,
+    repassRule: { type: 'percentage', value: 60 }
   }
 ];

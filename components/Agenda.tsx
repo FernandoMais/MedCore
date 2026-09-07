@@ -28,6 +28,7 @@ interface AgendaProps {
   patients: Patient[];
   doctors: Doctor[];
   currentUser: any;
+  onUpdateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
   startConsultation: (id: string) => void;
 }
 
@@ -39,6 +40,7 @@ const Agenda: React.FC<AgendaProps> = ({
   patients, 
   doctors, 
   currentUser,
+  onUpdateAppointmentStatus,
   startConsultation 
 }) => {
   // Helper para obter a data local no formato YYYY-MM-DD com precisão
@@ -67,13 +69,16 @@ const Agenda: React.FC<AgendaProps> = ({
     date: getLocalDateString(),
     time: '09:00',
     type: 'Consulta' as const,
-    room: 'Consultório 01'
+    room: 'Consultório 01',
+    serviceValue: '350',
+    repassRuleType: 'percentage' as const,
+    repassRuleValue: '60',
   });
 
   const createId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 
   const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
-    setAppointments(prev => prev.map(appt => appt.id === id ? { ...appt, status } : appt));
+    onUpdateAppointmentStatus(id, status);
   };
 
   const handleStartConsultation = (id: string) => {
@@ -118,11 +123,31 @@ const Agenda: React.FC<AgendaProps> = ({
       alert("Por favor, selecione um paciente e um médico.");
       return;
     }
+    const serviceValue = Number(newAppt.serviceValue.replace(',', '.'));
+    const repassRuleValue = Number(newAppt.repassRuleValue.replace(',', '.'));
+    if (!serviceValue || serviceValue <= 0 || Number.isNaN(repassRuleValue) || repassRuleValue < 0) {
+      alert("Informe um valor de atendimento e uma regra de repasse válidos.");
+      return;
+    }
+    if (newAppt.repassRuleType === 'percentage' && repassRuleValue > 100) {
+      alert("O percentual de repasse deve estar entre 0% e 100%.");
+      return;
+    }
 
     const createdAppt: Appointment = {
       id: createId('appt'),
-      ...newAppt,
-      status: AppointmentStatus.SCHEDULED
+      patientId: newAppt.patientId,
+      doctorId: newAppt.doctorId,
+      date: newAppt.date,
+      time: newAppt.time,
+      type: newAppt.type,
+      room: newAppt.room,
+      serviceValue,
+      repassRule: {
+        type: newAppt.repassRuleType,
+        value: repassRuleValue,
+      },
+      status: AppointmentStatus.SCHEDULED,
     };
 
     setAppointments(prev => [createdAppt, ...prev]);
@@ -369,7 +394,12 @@ const Agenda: React.FC<AgendaProps> = ({
                             <div className="flex flex-wrap items-center gap-2 lg:gap-3 text-[9px] lg:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
                               <span className="flex items-center bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm"><Users size={10} className="mr-1 lg:mr-2 text-blue-500" /> {appt.type}</span>
                               <span className="flex items-center bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm"><MapPin size={10} className="mr-1 lg:mr-2 text-emerald-500" /> {appt.room}</span>
-                              <span className="flex items-center text-slate-500"><Stethoscope size={10} className="mr-1 lg:mr-2" /> Dr. {doctor?.name || 'Médico'}</span>
+                               <span className="flex items-center text-slate-500"><Stethoscope size={10} className="mr-1 lg:mr-2" /> Dr. {doctor?.name || 'Médico'}</span>
+                               {appt.serviceValue ? (
+                                 <span className="text-emerald-600">
+                                   R$ {appt.serviceValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                 </span>
+                               ) : null}
                             </div>
                           </div>
                         </div>
@@ -524,6 +554,44 @@ const Agenda: React.FC<AgendaProps> = ({
                     <option value="Consultório 02">Consultório 02</option>
                     <option value="Sala de Exames">Sala de Exames</option>
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor do atendimento (R$) *</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                    value={newAppt.serviceValue}
+                    onChange={e => setNewAppt({ ...newAppt, serviceValue: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Regra de repasse *</label>
+                  <div className="flex gap-2">
+                    <select
+                      className="w-1/2 p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                      value={newAppt.repassRuleType}
+                      onChange={e => setNewAppt({ ...newAppt, repassRuleType: e.target.value as 'percentage' | 'fixed' })}
+                    >
+                      <option value="percentage">Percentual</option>
+                      <option value="fixed">Valor fixo</option>
+                    </select>
+                    <input
+                      type="number"
+                      min="0"
+                      max={newAppt.repassRuleType === 'percentage' ? 100 : undefined}
+                      step="0.01"
+                      className="w-1/2 p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                      value={newAppt.repassRuleValue}
+                      onChange={e => setNewAppt({ ...newAppt, repassRuleValue: e.target.value })}
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 

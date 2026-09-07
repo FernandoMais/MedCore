@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus, Medication, SigilousNote, FinanceSection } from './types';
 import { storage, AppDatabase } from './services/storage';
+import { ensureFinancialEntriesForAppointment } from './services/financialAutomation';
 import Dashboard from './components/Dashboard';
 import PatientManager from './components/PatientManager';
 import Agenda from './components/Agenda';
@@ -198,6 +199,31 @@ const App: React.FC = () => {
     setCurrentView('consultation');
   };
 
+  const updateAppointmentStatus = (appointmentId: string, status: AppointmentStatus) => {
+    setDb(prev => {
+      const appointment = (prev.appointments || []).find(item => item.id === appointmentId);
+      if (!appointment) return prev;
+
+      const nextAppointments = (prev.appointments || []).map(item =>
+        item.id === appointmentId ? { ...item, status } : item,
+      );
+      const shouldGenerateFinancialEntries = status === AppointmentStatus.CONFIRMED || status === AppointmentStatus.FINISHED;
+      const nextFinancial = shouldGenerateFinancialEntries
+        ? ensureFinancialEntriesForAppointment(
+            prev.financial,
+            appointment,
+            currentUser.clinicId || 'clinic-demo-001',
+          )
+        : prev.financial;
+
+      return {
+        ...prev,
+        appointments: nextAppointments,
+        financial: nextFinancial,
+      };
+    });
+  };
+
   const handleFinishConsultation = async (evolutionData?: { 
     diagnosis: string; 
     conduct: string; 
@@ -263,11 +289,17 @@ const App: React.FC = () => {
                 ? { ...a, status: AppointmentStatus.FINISHED } 
                 : a
             );
+            const updatedFinancial = ensureFinancialEntriesForAppointment(
+              prev.financial,
+              appointment,
+              currentUser.clinicId || 'clinic-demo-001',
+            );
 
             return {
               ...prev,
               patients: updatedPatients,
-              appointments: updatedAppointments
+              appointments: updatedAppointments,
+              financial: updatedFinancial,
             };
           });
 
@@ -508,6 +540,7 @@ const App: React.FC = () => {
               patients={filteredPatients}
               doctors={db.doctors || []}
               currentUser={currentUser}
+               onUpdateAppointmentStatus={updateAppointmentStatus}
               startConsultation={startConsultation} 
             />
           )}

@@ -57,6 +57,8 @@ create table if not exists public.appointments (
   status text not null,
   room text
 );
+alter table public.appointments add column if not exists "serviceValue" numeric(14,2);
+alter table public.appointments add column if not exists "repassRule" jsonb;
 
 -- Cadastro de medicamentos
 create table if not exists public.medications (
@@ -177,6 +179,8 @@ create table if not exists public.financial_repasses (
   "paidDate" text,
   notes text
 );
+alter table public.financial_repasses add column if not exists "patientId" text;
+alter table public.financial_repasses add column if not exists "appointmentId" text;
 
 create table if not exists public.financial_cash_closures (
   id text primary key,

@@ -49,6 +49,13 @@ export interface Doctor {
   availableTimes: DoctorSchedule[];
 }
 
+export type RepassRuleType = 'percentage' | 'fixed';
+
+export interface RepassRule {
+  type: RepassRuleType;
+  value: number;
+}
+
 export interface MedicalFile {
   id: string;
   name: string;
@@ -97,6 +104,8 @@ export interface Appointment {
   type: 'Consulta' | 'Retorno' | 'Procedimento' | 'Telemedicina';
   status: AppointmentStatus;
   room?: string;
+  serviceValue?: number;
+  repassRule?: RepassRule;
 }
 
 export interface MedicalRecord {
@@ -248,6 +257,8 @@ export interface ProfessionalRepass {
   id: string;
   clinicId: string;
   doctorId: string;
+  patientId?: string;
+  appointmentId?: string;
   referenceMonth: string;
   grossAmount: number;
   percentage?: number;

@@ -88,7 +88,9 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
       time: selectedTime,
       type: selectedType,
       status: AppointmentStatus.SCHEDULED,
-      room: 'A definir'
+      room: 'A definir',
+      serviceValue: selectedType === 'Retorno' ? 180 : 350,
+      repassRule: { type: 'percentage', value: 60 },
     };
 
     onAddAppointment(appt);

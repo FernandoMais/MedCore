@@ -423,6 +423,14 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
               <div className="flex items-center space-x-2 lg:space-x-3 text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
                 <span className="bg-slate-100 px-1.5 py-0.5 rounded shadow-inner truncate">{appointment.type}</span>
                 <span className="text-blue-600 truncate">CPF: {patient.cpf}</span>
+                 {appointment.serviceValue !== undefined && (
+                   <span className="text-emerald-600 truncate">
+                     R$ {appointment.serviceValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                     {appointment.repassRule
+                       ? ` • Repasse ${appointment.repassRule.type === 'percentage' ? `${appointment.repassRule.value}%` : `R$ ${appointment.repassRule.value.toFixed(2)}`}`
+                       : ''}
+                   </span>
+                 )}
               </div>
             </div>
           </div>
