@@ -14,7 +14,6 @@
 --    envia o clinicId como claim JWT. Ativar RLS sem esse vínculo
 --    bloquearia a sincronização do aplicativo.
 -- ============================================================
-
 begin;
 
 create extension if not exists pgcrypto;
