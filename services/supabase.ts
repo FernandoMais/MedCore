@@ -33,6 +33,7 @@ function createStub() {
   };
   return {
     from: () => builder,
+    rpc: () => Promise.resolve(result),
     auth: {
       getUser: () => Promise.resolve({ data: { user: null }, error }),
       signInWithPassword: () => Promise.resolve({ data: null, error }),

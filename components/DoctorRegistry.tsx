@@ -30,13 +30,14 @@ import { provisionAuthAccount } from '../services/auth';
 interface DoctorRegistryProps {
   doctors: Doctor[];
   users: User[];
+  clinicId: string;
   setDoctors: React.Dispatch<React.SetStateAction<Doctor[]>>;
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
 }
 
 const DAYS_OF_WEEK = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoctors, setUsers }) => {
+const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicId, setDoctors, setUsers }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -107,13 +108,14 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, setDoct
       password: formData.password,
       name: formData.name,
       role: formData.role,
-      doctorId: doctorId
+      doctorId: doctorId,
+      clinicId,
     };
 
     setUsers(prev => [newUser, ...prev]);
 
     // Provisiona conta no Supabase Auth em background (não bloqueia o cadastro local).
-    provisionAuthAccount(newUser.username, newUser.password).catch(() => {});
+    provisionAuthAccount(newUser.username, newUser.password, newUser.clinicId).catch(() => {});
 
     setShowAddModal(false);
     setFormData({

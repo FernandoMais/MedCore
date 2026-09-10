@@ -14,6 +14,13 @@ create table if not exists public.users (
   "clinicId" text not null default 'clinic-demo-001'
 );
 
+-- Vincula a conta interna à identidade autenticada do Supabase. O vínculo é
+-- criado somente pela função bind_current_user(), depois do login.
+alter table public.users add column if not exists "authUserId" uuid;
+create unique index if not exists idx_users_auth_user_id
+  on public.users ("authUserId")
+  where "authUserId" is not null;
+
 -- Tabela de médicos
 create table if not exists public.doctors (
   id text primary key,
@@ -242,8 +249,7 @@ create index if not exists idx_financial_reconciliation_clinic_status
   on public.financial_reconciliations ("clinicId", status);
 
 -- ============================================================
--- Row Level Security (políticas abertas para anon key)
--- Ajuste depois conforme sua necessidade de segurança.
+-- Row Level Security
 -- ============================================================
 alter table public.users enable row level security;
 alter table public.doctors enable row level security;
@@ -259,5 +265,114 @@ begin
   loop
     execute format('drop policy if exists "anon all access" on public.%I', t);
     execute format('create policy "anon all access" on public.%I for all using (true) with check (true)', t);
+  end loop;
+end $$;
+
+-- Retorna o tenant da identidade autenticada sem expor a tabela users ao
+-- mecanismo de RLS da própria consulta. A associação é feita por authUserId,
+-- nunca por um clinicId enviado pelo navegador.
+create or replace function public.current_user_clinic_id()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select u."clinicId"
+  from public.users u
+  where u."authUserId" = auth.uid()
+  limit 1
+$$;
+
+-- Associa a sessão atual ao usuário interno após o signIn. O e-mail sintético
+-- é usado apenas para localizar o próprio usuário; o tenant vem da linha
+-- authoritative em public.users.
+create or replace function public.bind_current_user()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  internal_user_id text;
+  internal_clinic_id text;
+  current_auth_user uuid;
+begin
+  current_auth_user := auth.uid();
+  if current_auth_user is null then
+    raise exception 'Sessão não autenticada';
+  end if;
+
+  select u.id, u."clinicId"
+    into internal_user_id, internal_clinic_id
+  from public.users u
+  where lower(u.username) = lower(split_part(coalesce(auth.jwt() ->> 'email', ''), '@', 1))
+  limit 1;
+
+  if internal_user_id is null or internal_clinic_id is null then
+    raise exception 'Usuário sem clínica autorizada';
+  end if;
+
+  update public.users
+     set "authUserId" = current_auth_user
+   where id = internal_user_id
+     and ("authUserId" is null or "authUserId" = current_auth_user);
+
+  if not found then
+    raise exception 'Usuário já vinculado a outra sessão';
+  end if;
+
+  return internal_clinic_id;
+end;
+$$;
+
+revoke all on function public.current_user_clinic_id() from public;
+revoke all on function public.bind_current_user() from public;
+grant execute on function public.current_user_clinic_id() to authenticated;
+grant execute on function public.bind_current_user() to authenticated;
+
+-- A tabela de usuários ainda precisa ser consultável pelo login legado, mas
+-- ninguém pode alterar clinicId com a anon key. Usuários autenticados só
+-- conseguem operar registros do próprio tenant; a função de vínculo acima é
+-- a única exceção controlada para preencher authUserId.
+drop policy if exists "anon all access" on public.users;
+drop policy if exists "anonymous user lookup" on public.users;
+drop policy if exists "tenant user access" on public.users;
+create policy "anonymous user lookup" on public.users
+  for select to anon using (true);
+create policy "tenant user access" on public.users
+  for all to authenticated
+  using ("clinicId" = public.current_user_clinic_id() or "authUserId" = auth.uid())
+  with check (
+    "clinicId" = public.current_user_clinic_id()
+    and ("authUserId" is null or "authUserId" = auth.uid())
+  );
+
+-- Todas as operações financeiras exigem uma sessão autenticada vinculada ao
+-- mesmo tenant. Sem uma política para anon, chamadas diretas com a anon key
+-- não conseguem ler nem gravar dados financeiros.
+do $$
+declare t text;
+begin
+  for t in select unnest(array[
+    'financial_transactions',
+    'financial_categories',
+    'financial_cost_centers',
+    'financial_payment_methods',
+    'financial_bank_accounts',
+    'financial_insurance_plans',
+    'financial_repasses',
+    'financial_cash_closures',
+    'financial_reconciliations',
+    'financial_billing_records',
+    'financial_settings'
+  ])
+  loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "tenant financial access" on public.%I', t);
+    execute format(
+      'create policy "tenant financial access" on public.%I for all to authenticated using ("clinicId" = public.current_user_clinic_id()) with check ("clinicId" = public.current_user_clinic_id())',
+      t
+    );
   end loop;
 end $$;

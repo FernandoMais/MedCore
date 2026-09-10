@@ -27,19 +27,42 @@ export async function loginUser(
   }
 
   const email = synthEmail(localUser.username);
+  let authenticatedUserId: string | null = null;
 
   try {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
+    const signIn = await supabase.auth.signInWithPassword({ email, password });
+    if (!signIn.error) {
+      authenticatedUserId = signIn.data?.user?.id || null;
+    } else {
       // Provavelmente o usuário ainda não existe no Auth — auto-cadastra e tenta novamente.
-      const signUpRes = await supabase.auth.signUp({ email, password });
+      const signUpRes = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { clinicId: localUser.clinicId } },
+      });
       if (signUpRes.error && !/already registered|already exists/i.test(signUpRes.error.message || '')) {
         console.warn('Supabase signUp falhou:', signUpRes.error.message);
       }
       const retry = await supabase.auth.signInWithPassword({ email, password });
+      authenticatedUserId = retry.data?.user?.id || null;
       if (retry.error) {
         // Senha local não bate com a do Auth (provavelmente trocada offline). Mantemos sessão local válida.
         console.warn('Supabase signIn pós-signUp falhou:', retry.error.message);
+      }
+    }
+
+    // A clínica retornada pelo banco é a fonte de verdade para a sessão.
+    // Se a função ainda não foi aplicada no projeto Supabase, mantemos o
+    // login local para não quebrar o modo offline; a RLS continuará negando
+    // acessos cloud até que a migração seja executada.
+    if (authenticatedUserId) {
+      const binding = await (supabase as any).rpc('bind_current_user');
+      if (!binding.error && binding.data && binding.data !== localUser.clinicId) {
+        await supabase.auth.signOut();
+        return { ok: false, error: 'A sessão não pertence à clínica autorizada.' };
+      }
+      if (binding.error) {
+        console.warn('Não foi possível vincular a sessão à clínica:', binding.error.message);
       }
     }
   } catch (e) {
@@ -60,11 +83,15 @@ export async function logoutUser(): Promise<void> {
  * Falha silenciosa: o usuário continua existindo localmente mesmo se o signUp não der certo
  * (ex.: e-mail synthEmail já cadastrado em outro projeto).
  */
-export async function provisionAuthAccount(username: string, password: string): Promise<void> {
+export async function provisionAuthAccount(username: string, password: string, clinicId?: string): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
     const email = synthEmail(username);
-    const res = await supabase.auth.signUp({ email, password });
+    const res = await supabase.auth.signUp({
+      email,
+      password,
+      options: clinicId ? { data: { clinicId } } : undefined,
+    });
     if (res.error && !/already registered|already exists/i.test(res.error.message || '')) {
       console.warn('Não foi possível criar conta no Supabase Auth:', res.error.message);
     }

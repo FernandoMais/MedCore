@@ -1,1 +1,2 @@
+- [Financial tenant isolation](tenant-isolation.md) — derive the clinic from the authenticated Supabase binding, never from a browser-supplied tenant.
 - [Hook pós-merge e dependências](post-merge-npm-firewall.md) — reutilize dependências instaladas e mantenha protobufjs em versão não bloqueada pelo firewall do ambiente.

@@ -13,7 +13,7 @@ export interface User {
   name: string;
   role: UserRole;
   doctorId?: string;
-  clinicId?: string;
+  clinicId: string;
   senhaAcesso?: string; // Senha sigilosa definida pelo admin para acesso a informações restritas
 }
 

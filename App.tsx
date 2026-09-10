@@ -88,7 +88,7 @@ const App: React.FC = () => {
       if (currentUser) {
         setIsSyncing(true);
         try {
-          await storage.syncToCloud(db);
+          await storage.syncToCloud(db, currentUser.clinicId);
           setCloudStatus('connected');
         } catch (err) {
           setCloudStatus('offline');
@@ -103,6 +103,14 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
+    // Só busca dados financeiros depois que o login vinculou a sessão ao
+    // tenant. Antes disso, o fetch é deliberadamente um no-op.
+    storage.fetchFromCloud(user.clinicId).then(cloudData => {
+      if (cloudData && Object.keys(cloudData).length > 0) {
+        setDb(prev => ({ ...prev, ...cloudData }));
+        setCloudStatus('connected');
+      }
+    });
     setCurrentView('dashboard');
     setActiveAppointmentId(null);
     setShowLanding(false);
@@ -212,7 +220,7 @@ const App: React.FC = () => {
         ? ensureFinancialEntriesForAppointment(
             prev.financial,
             appointment,
-            currentUser.clinicId || 'clinic-demo-001',
+            currentUser.clinicId,
           )
         : prev.financial;
 
@@ -292,7 +300,7 @@ const App: React.FC = () => {
             const updatedFinancial = ensureFinancialEntriesForAppointment(
               prev.financial,
               appointment,
-              currentUser.clinicId || 'clinic-demo-001',
+              currentUser.clinicId,
             );
 
             return {
@@ -578,7 +586,7 @@ const App: React.FC = () => {
           {currentView === 'finance' && (
             <FinancialModule
               section={financeSection}
-              clinicId={currentUser.clinicId || 'clinic-demo-001'}
+              clinicId={currentUser.clinicId}
               currentUser={currentUser}
               patients={filteredPatients}
               doctors={db.doctors || []}
@@ -591,6 +599,7 @@ const App: React.FC = () => {
             <DoctorRegistry 
               doctors={db.doctors || []} 
               users={db.users || []}
+              clinicId={currentUser.clinicId}
               setDoctors={(newD) => setDb(prev => {
                 const doctorsList = prev.doctors || [];
                 const nextDoctors = typeof newD === 'function' ? newD(doctorsList) : newD;

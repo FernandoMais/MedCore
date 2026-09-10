@@ -29,6 +29,22 @@ export interface AppDatabase {
 
 const CLINIC_ID = 'clinic-demo-001';
 
+const requireClinicId = (clinicId: string): string => {
+  const normalizedClinicId = clinicId?.trim();
+  if (!normalizedClinicId) {
+    throw new Error('Sessão sem clínica autorizada.');
+  }
+  return normalizedClinicId;
+};
+
+const financialRowsForClinic = <T extends { clinicId: string }>(rows: T[], clinicId: string): T[] => {
+  const scopedRows = rows.filter(row => row.clinicId === clinicId);
+  if (scopedRows.length !== rows.length) {
+    throw new Error('A operação contém dados de outra clínica.');
+  }
+  return scopedRows;
+};
+
 const normalizeAppointments = (appointments: Appointment[]): Appointment[] => appointments.map(appointment => ({
   ...appointment,
   serviceValue: appointment.serviceValue ?? (appointment.type === 'Procedimento' ? 500 : appointment.type === 'Retorno' ? 180 : 350),
@@ -147,7 +163,7 @@ export const storage = {
         const hasAdmin = users.some((u: User) => u.username === 'admin');
         const finalUsers = hasAdmin ? users : [...DEFAULT_DB.users.filter(u => u.username === 'admin'), ...users];
         return {
-          users: finalUsers,
+          users: finalUsers.map((user: User) => ({ ...user, clinicId: user.clinicId || CLINIC_ID })),
           patients: Array.isArray(parsed.patients) ? parsed.patients : DEFAULT_DB.patients,
           doctors: Array.isArray(parsed.doctors) ? parsed.doctors : DEFAULT_DB.doctors,
           appointments: Array.isArray(parsed.appointments) ? normalizeAppointments(parsed.appointments) : DEFAULT_DB.appointments,
@@ -180,7 +196,11 @@ export const storage = {
     return DEFAULT_DB;
   },
 
-  fetchFromCloud: async (): Promise<Partial<AppDatabase>> => {
+  fetchFromCloud: async (clinicId?: string): Promise<Partial<AppDatabase>> => {
+    // Antes do login não existe tenant autorizado. Não consultar a nuvem
+    // nesse momento evita substituir o estado local por respostas vazias/RLS.
+    if (!clinicId) return {};
+    const authorizedClinicId = requireClinicId(clinicId);
     try {
       const cloudData: Partial<AppDatabase> = {};
       const assignIfNonEmpty = <K extends keyof AppDatabase>(key: K, res: any) => {
@@ -209,13 +229,15 @@ export const storage = {
         financial_settings: 'settings',
       };
       const financial = { ...DEFAULT_FINANCIAL } as FinancialData;
+      let loadedFinancialTable = false;
       for (const [table, key] of Object.entries(financialTables)) {
-        const result = await supabase.from(table).select('*');
+        const result = await supabase.from(table).select('*').eq('clinicId', authorizedClinicId);
         if (!result.error && Array.isArray(result.data) && result.data.length > 0) {
           (financial[key] as any) = result.data;
+          loadedFinancialTable = true;
         }
       }
-      if (Object.values(financial).some(value => Array.isArray(value) && value.length > 0)) {
+      if (loadedFinancialTable) {
         cloudData.financial = financial;
       }
       if (Array.isArray(cloudData.appointments)) {
@@ -237,7 +259,8 @@ export const storage = {
     }
   },
 
-  syncToCloud: async (db: AppDatabase) => {
+  syncToCloud: async (db: AppDatabase, clinicId: string) => {
+    const authorizedClinicId = requireClinicId(clinicId);
     try {
       if (db.patients?.length > 0) await supabase.from('patients').upsert(db.patients);
       if (db.doctors?.length > 0) await supabase.from('doctors').upsert(db.doctors);
@@ -261,7 +284,11 @@ export const storage = {
         };
         for (const [key, table] of Object.entries(financialTables)) {
           const rows = db.financial[key as keyof FinancialData];
-          if (Array.isArray(rows) && rows.length > 0) await supabase.from(table).upsert(rows);
+          if (Array.isArray(rows) && rows.length > 0) {
+            const scopedRows = financialRowsForClinic(rows as Array<{ clinicId: string }>, authorizedClinicId);
+            const { error } = await supabase.from(table).upsert(scopedRows);
+            if (error) throw error;
+          }
         }
       }
     } catch (e) {
