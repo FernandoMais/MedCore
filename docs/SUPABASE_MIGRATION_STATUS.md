@@ -42,10 +42,56 @@ Não foram alterados registros, permissões ou configurações da origem.
 O projeto antigo não foi reativado. Reativá-lo pode reconectar aplicativos,
 sincronizações e rotinas existentes; a recuperação precisa ser controlada.
 
+## Concluído: análise do backup fornecido
+
+O usuário forneceu um `.gz` do banco antigo. A compressão é íntegra e o
+conteúdo é um dump PostgreSQL em texto SQL, com aproximadamente 3,2 MB
+descomprimidos. A análise foi somente leitura, sem execução do dump.
+
+Contagens das seções COPY encontradas no arquivo:
+
+| Tabela | Registros |
+| --- | ---: |
+| `public.patients` | 6 |
+| `public.doctors` | 5 |
+| `public.appointments` | 18 |
+| `public.users` | 5 |
+| `auth.users` | 0 |
+| `storage.objects` | 0 |
+
+Há três arquivos de pacientes embutidos como URLs `data:` no JSON. Não foram
+encontrados vínculos órfãos entre os quatro conjuntos públicos nem IDs ou CPFs
+normalizados duplicados. Os perfis têm quatro papéis `doctor` e um `admin`.
+Cinco dos seis CPFs não passam na validação de dígitos verificadores; três
+pacientes não possuem e-mail. Esses valores não foram exibidos nem corrigidos.
+
+O arquivo contém somente quatro tabelas públicas. Não contém tabelas
+financeiras, de evolução ou de notas sigilosas. Isso **não comprova ausência**
+desses dados no aplicativo ou em registros posteriores; os dados locais ainda
+precisam ser conferidos.
+
+O nome do arquivo indica 20/09/2026; não há cabeçalho de início/fim do dump que
+confirme a data. A data de download não é a data dos dados copiados.
+
+Compatibilidade a resolver antes da importação:
+
+- As quatro tabelas antigas não possuem `clinicId`; a clínica não pode ser
+  atribuída arbitrariamente.
+- `users.doctorId` precisa de mapeamento explícito para `users.doctor_id`.
+- Os timestamps extras `appointments.createdAt`, `users.createdAt` e
+  `doctors.updatedAt` devem ser preservados, não descartados silenciosamente.
+- Os cinco perfis antigos não equivalem a contas Supabase Auth. O dump não
+  fornece contas Auth ou senhas Auth para transferir.
+- CPFs inválidos/e-mails ausentes precisam de revisão antes de habilitar
+  cadastro/login dos pacientes; a migração não deve inventar esses dados.
+
+Nenhum registro do backup foi importado. Nenhum conteúdo individual ou senha
+foi publicado no chat. O arquivo comprimido está excluído do versionamento.
+
 ## Ainda não concluído
 
 - Backup e reconciliação dos dados locais em cada navegador/dispositivo.
-- Inventário e backup autorizado da origem.
+- Conferência do banco atual e reconciliação do backup fornecido com os dados locais.
 - Transferência dos registros e das contas Auth, preservando IDs e hashes.
 - Cópia e conferência de arquivos, se existirem.
 - Configuração de Edge Functions, Auth, SMTP e demais serviços no destino.
