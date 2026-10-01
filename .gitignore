@@ -11,6 +11,7 @@ node_modules
 .migration-backups/
 # Database backups uploaded for migration may contain confidential data.
 attached_assets/**/*.[gG][zZ]
+attached_assets/**/*medcore*backup*.[jJ][sS][oO][nN]
 dist
 dist-ssr
 *.local

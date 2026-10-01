@@ -76,7 +76,9 @@ confirme a data. A data de download não é a data dos dados copiados.
 Compatibilidade a resolver antes da importação:
 
 - As quatro tabelas antigas não possuem `clinicId`; a clínica não pode ser
-  atribuída arbitrariamente.
+  atribuída arbitrariamente. O usuário confirmou que todos os registros
+  pertencem a uma única clínica; o identificador existente ainda precisa
+  ser conciliado com os dados locais.
 - `users.doctorId` precisa de mapeamento explícito para `users.doctor_id`.
 - Os timestamps extras `appointments.createdAt`, `users.createdAt` e
   `doctors.updatedAt` devem ser preservados, não descartados silenciosamente.
@@ -87,6 +89,17 @@ Compatibilidade a resolver antes da importação:
 
 Nenhum registro do backup foi importado. Nenhum conteúdo individual ou senha
 foi publicado no chat. O arquivo comprimido está excluído do versionamento.
+
+## Dados adicionais confirmados
+
+O usuário confirmou que há dados adicionais no aplicativo fora do dump
+fornecido. Portanto, esse dump não é a única fonte autorizada para a
+transferência. É necessário obter cópias locais dos navegadores/dispositivos
+relevantes e conciliar os conjuntos por IDs antes de importar ou trocar a conexão.
+
+O problema do botão de backup foi aceito como trabalho separado e está
+aguardando execução. A coleta alternativa não deve modificar o armazenamento
+local, restaurar arquivos ou alterar contas/permissões.
 
 ## Ainda não concluído
 
