@@ -22,7 +22,7 @@ interface PatientPortalProps {
   patient: Patient;
   doctors: Doctor[];
   appointments: Appointment[];
-  onAddAppointment: (appt: Appointment) => void;
+  onAddAppointment: (appt: Appointment) => Promise<void>;
   onLogout: () => void;
 }
 
@@ -57,6 +57,7 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
   const [showConfirm, setShowConfirm] = useState(false);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [bookingError, setBookingError] = useState('');
   const [notifMsg, setNotifMsg] = useState('');
 
   const myAppointments = useMemo(
@@ -76,39 +77,44 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
   );
 
   const handleBook = async () => {
-    if (!selectedTime || !selectedDoctorId || !selectedDate) return;
+    if (!selectedTime || !selectedDoctorId || !selectedDate || loading) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
+    setBookingError('');
 
-    const appt: Appointment = {
-      id: `appt-${crypto.randomUUID()}`,
-      patientId: patient.id,
-      doctorId: selectedDoctorId,
-      date: selectedDate,
-      time: selectedTime,
-      type: selectedType,
-      status: AppointmentStatus.SCHEDULED,
-      room: 'A definir',
-      serviceValue: selectedType === 'Retorno' ? 180 : 350,
-      repassRule: { type: 'percentage', value: 60 },
-    };
+    try {
+      const appt: Appointment = {
+        id: `appt-${crypto.randomUUID()}`,
+        patientId: patient.id,
+        doctorId: selectedDoctorId,
+        date: selectedDate,
+        time: selectedTime,
+        type: selectedType,
+        status: AppointmentStatus.SCHEDULED,
+        room: 'A definir',
+        serviceValue: selectedType === 'Retorno' ? 180 : 350,
+        repassRule: { type: 'percentage', value: 60 },
+      };
 
-    onAddAppointment(appt);
+      await onAddAppointment(appt);
 
-    const dateFormatted = formatDisplayDate(selectedDate).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-    setNotifMsg(
-      `Consulta agendada com ${selectedDoctor?.name} para ${dateFormatted} às ${selectedTime}. ` +
-      `Uma confirmação foi registrada no sistema.`
-    );
+      const dateFormatted = formatDisplayDate(selectedDate).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+      setNotifMsg(
+        `Consulta agendada com ${selectedDoctor?.name} para ${dateFormatted} às ${selectedTime}. ` +
+        `Uma confirmação foi registrada no sistema.`
+      );
 
-    setLoading(false);
-    setShowConfirm(false);
-    setDone(true);
-    setSelectedTime('');
-    setTimeout(() => {
-      setDone(false);
-      setTab('agenda');
-    }, 4000);
+      setShowConfirm(false);
+      setDone(true);
+      setSelectedTime('');
+      setTimeout(() => {
+        setDone(false);
+        setTab('agenda');
+      }, 4000);
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : 'Não foi possível salvar o agendamento. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const upcomingCount = myAppointments.filter(a =>
@@ -152,6 +158,12 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
             <h2 className="text-xl font-black text-slate-800">Olá, {patient.name.split(' ')[0]}!</h2>
             <p className="text-sm text-slate-500 font-medium">{patient.email}</p>
           </div>
+        </div>
+        <div className="flex justify-end">
+          <button onClick={onLogout} className="flex items-center space-x-2 px-4 py-3 bg-white border border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest">
+            <LogOut size={14} />
+            <span>Voltar à página inicial</span>
+          </button>
         </div>
 
         {/* Notificação de agendamento */}
@@ -377,8 +389,14 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
                 {selectedDoctor?.name} — {formatDisplayDate(selectedDate).toLocaleDateString('pt-BR')} às {selectedTime}
               </p>
             </div>
+            {bookingError && (
+              <div role="alert" className="flex items-start space-x-2 bg-red-50 border border-red-200 rounded-xl p-3 text-xs font-bold text-red-700">
+                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                <span>{bookingError}</span>
+              </div>
+            )}
             <div className="flex space-x-3">
-              <button onClick={() => setShowConfirm(false)} className="flex-1 py-3 border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all">
+              <button onClick={() => { setShowConfirm(false); setBookingError(''); }} disabled={loading} className="flex-1 py-3 border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all disabled:opacity-50">
                 Cancelar
               </button>
               <button onClick={handleBook} disabled={loading} className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center space-x-2 disabled:opacity-60">

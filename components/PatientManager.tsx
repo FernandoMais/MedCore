@@ -18,11 +18,12 @@ import {
   FileLock2,
   KeyRound,
   RefreshCw,
-  ChevronDown,
-  ShieldCheck
+  ShieldCheck,
+  Home
 } from 'lucide-react';
 import { Patient, Gender, Doctor, MedicalFile, User as AppUser, SigilousNote, UserRole } from '../types';
 import RestrictedHistory from './RestrictedHistory';
+import { requestAdminPatientReset } from '../services/patientAuth';
 
 interface PatientManagerProps {
   patients: Patient[];
@@ -31,16 +32,21 @@ interface PatientManagerProps {
   isAdmin: boolean;
   currentUser: AppUser;
   sigilousNotes?: SigilousNote[];
+  onBackHome?: () => void;
 }
 
 const inputCls = 'w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-800 placeholder:text-slate-300 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all';
 
-const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, doctors, isAdmin, currentUser, sigilousNotes = [] }) => {
+type PatientAuthMetadata = Patient & { authUserId?: string; pendingAuthUserId?: string; clinicId?: string };
+
+const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, doctors, isAdmin, currentUser, sigilousNotes = [], onBackHome }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [resettingPatientId, setResettingPatientId] = useState<string | null>(null);
+  const [resetFeedback, setResetFeedback] = useState<{ patientId: string; kind: 'success' | 'error'; message: string } | null>(null);
   const [showSigilous, setShowSigilous] = useState(false);
   const [sigilousUnlocked, setSigilousUnlocked] = useState(false);
   const [sigilousInput, setSigilousInput] = useState('');
@@ -48,6 +54,11 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
   const [showSigilousInput, setShowSigilousInput] = useState(false);
 
   const selectedPatient = patients.find(p => p.id === selectedPatientId) || null;
+  const selectedPatientHasAuthAccount = Boolean(
+    showEditModal &&
+    selectedPatient &&
+    ((selectedPatient as PatientAuthMetadata).authUserId || (selectedPatient as PatientAuthMetadata).pendingAuthUserId || selectedPatient.portalEnrollmentPending)
+  );
 
   const createId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 
@@ -67,9 +78,19 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
   const startEdit = () => {
     if (!selectedPatient) return;
     setFormData({
-      ...selectedPatient,
+      name: selectedPatient.name,
+      birthDate: selectedPatient.birthDate,
+      gender: selectedPatient.gender,
+      cpf: selectedPatient.cpf,
+      email: selectedPatient.email,
+      phone: selectedPatient.phone,
+      address: selectedPatient.address,
+      healthInsurance: selectedPatient.healthInsurance || '',
+      bloodType: selectedPatient.bloodType || '',
       allergies: selectedPatient.allergies.join(', '),
-      preExistingConditions: selectedPatient.preExistingConditions.join(', ')
+      preExistingConditions: selectedPatient.preExistingConditions.join(', '),
+      history: selectedPatient.history,
+      primaryDoctorId: selectedPatient.primaryDoctorId
     });
     setShowEditModal(true);
   };
@@ -78,20 +99,56 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
     e.preventDefault();
     setIsSaving(true);
 
-    const processedPatient: Patient = {
-      ...formData,
+    const originalPatient = showEditModal ? selectedPatient as PatientAuthMetadata : null;
+    const processedPatient: PatientAuthMetadata = {
       id: showEditModal ? selectedPatient!.id : createId('patient'),
+      name: formData.name,
+      birthDate: formData.birthDate,
+      gender: formData.gender,
+      cpf: formData.cpf,
+      email: formData.email,
+      phone: formData.phone,
+      address: formData.address,
+      healthInsurance: formData.healthInsurance || undefined,
+      bloodType: formData.bloodType || undefined,
       allergies: typeof formData.allergies === 'string' ? formData.allergies.split(',').map((a: string) => a.trim()).filter((a: string) => a !== '') : formData.allergies,
       preExistingConditions: typeof formData.preExistingConditions === 'string' ? formData.preExistingConditions.split(',').map((c: string) => c.trim()).filter((c: string) => c !== '') : formData.preExistingConditions,
+      history: formData.history || '',
       createdAt: showEditModal ? selectedPatient!.createdAt : new Date().toISOString(),
       files: showEditModal ? (selectedPatient!.files || []) : [],
-      patientPassword: showEditModal ? selectedPatient!.patientPassword : undefined,
-      patientPasswordSet: showEditModal ? selectedPatient!.patientPasswordSet : false,
+      primaryDoctorId: formData.primaryDoctorId || '',
+      streetName: originalPatient?.streetName,
+      streetNumber: originalPatient?.streetNumber,
+      neighborhood: originalPatient?.neighborhood,
+      city: originalPatient?.city,
+      zipCode: originalPatient?.zipCode,
+      paymentValue: originalPatient?.paymentValue,
+      paymentSender: originalPatient?.paymentSender,
+      selfRegistered: originalPatient?.selfRegistered,
+      patientPasswordSet: originalPatient?.patientPasswordSet,
+      authUserId: originalPatient?.authUserId,
+      pendingAuthUserId: originalPatient?.pendingAuthUserId,
+      portalEnrollmentPending: originalPatient?.portalEnrollmentPending,
+      clinicId: originalPatient?.clinicId || currentUser.clinicId,
     };
 
     setPatients(prev => {
       if (showEditModal) {
-        return prev.map(p => p.id === processedPatient.id ? processedPatient : p);
+        return prev.map(p => {
+          if (p.id !== processedPatient.id) return p;
+          const currentPatient = p as PatientAuthMetadata;
+          return {
+            ...processedPatient,
+            files: currentPatient.files || processedPatient.files,
+            createdAt: currentPatient.createdAt,
+            selfRegistered: currentPatient.selfRegistered,
+            patientPasswordSet: currentPatient.patientPasswordSet,
+            authUserId: currentPatient.authUserId,
+            pendingAuthUserId: currentPatient.pendingAuthUserId,
+            portalEnrollmentPending: currentPatient.portalEnrollmentPending,
+            clinicId: currentPatient.clinicId || processedPatient.clinicId,
+          };
+        });
       }
       return [processedPatient, ...prev];
     });
@@ -130,12 +187,37 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
     ));
   };
 
-  const handleResetPatientPassword = () => {
-    if (!selectedPatient || !confirm(`Resetar a senha de acesso de ${selectedPatient.name}? O paciente precisará criar uma nova senha no próximo acesso.`)) return;
-    setPatients(prev => prev.map(p => 
-      p.id === selectedPatient.id ? { ...p, patientPassword: undefined, patientPasswordSet: false } : p
-    ));
-    alert('Senha do paciente resetada com sucesso. O paciente deverá criar uma nova senha no próximo acesso.');
+  const handleResetPatientPassword = async (patient: PatientAuthMetadata) => {
+    if (!patient.email || resettingPatientId) return;
+    const hasAuthAccount = Boolean(patient.authUserId || patient.pendingAuthUserId || patient.portalEnrollmentPending);
+    const instruction = hasAuthAccount
+      ? 'enviar um link para recuperar o acesso'
+      : 'enviar um convite para criar a senha inicial';
+    if (!confirm(`Enviar ${instruction} para ${patient.name} no e-mail cadastrado ${patient.email}?`)) return;
+
+    setResettingPatientId(patient.id);
+    setResetFeedback(null);
+    try {
+      await requestAdminPatientReset(patient.id);
+      if (!patient.authUserId) {
+        // Display only; the backend already persisted the protected enrollment.
+        setPatients(prev => prev.map(p => p.id === patient.id
+          ? { ...p, portalEnrollmentPending: true } : p));
+      }
+      setResetFeedback({
+        patientId: patient.id,
+        kind: 'success',
+        message: `${hasAuthAccount ? 'Link de recuperação' : 'Convite para criar a senha'} enviado para ${patient.email}.`
+      });
+    } catch (error) {
+      setResetFeedback({
+        patientId: patient.id,
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Não foi possível enviar o link. Tente novamente.'
+      });
+    } finally {
+      setResettingPatientId(null);
+    }
   };
 
   // Senha sigilosa = a senha definida pelo admin para o MÉDICO atual (User.senhaAcesso)
@@ -183,6 +265,11 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
 
   const patientFormFields = (
     <div className="space-y-4">
+      {selectedPatientHasAuthAccount && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-relaxed text-amber-800">
+          O e-mail e o CPF estão bloqueados porque este paciente já possui uma conta ou convite de acesso. A identidade da conta não pode ser alterada por este cadastro.
+        </p>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Nome completo" required>
           <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={inputCls} placeholder="Nome do paciente" required />
@@ -193,7 +280,7 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="CPF">
-          <input type="text" value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} className={inputCls} placeholder="000.000.000-00" />
+          <input type="text" value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} className={`${inputCls} disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed`} placeholder="000.000.000-00" disabled={selectedPatientHasAuthAccount} />
         </Field>
         <Field label="Gênero">
           <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} className={inputCls}>
@@ -205,7 +292,7 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="E-mail">
-          <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className={inputCls} placeholder="paciente@email.com" />
+          <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className={`${inputCls} disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed`} placeholder="paciente@email.com" disabled={selectedPatientHasAuthAccount} />
         </Field>
         <Field label="Telefone">
           <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className={inputCls} placeholder="(00) 00000-0000" />
@@ -249,15 +336,26 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Pacientes</h1>
           <p className="text-slate-500 font-medium">Gestão clínica e histórico dos pacientes.</p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => { setFormData({ name: '', birthDate: '', gender: Gender.MALE, cpf: '', email: '', phone: '', address: '', healthInsurance: '', bloodType: '', allergies: '', preExistingConditions: '', history: '', primaryDoctorId: doctors[0]?.id || '' }); setShowAddModal(true); }}
-            className="flex items-center space-x-2 px-5 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all"
-          >
-            <Plus size={16} />
-            <span>Novo Paciente</span>
-          </button>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {onBackHome && (
+            <button
+              onClick={onBackHome}
+              className="flex items-center space-x-2 px-4 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all"
+            >
+              <Home size={15} />
+              <span>Voltar à página inicial</span>
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => { setFormData({ name: '', birthDate: '', gender: Gender.MALE, cpf: '', email: '', phone: '', address: '', healthInsurance: '', bloodType: '', allergies: '', preExistingConditions: '', history: '', primaryDoctorId: doctors[0]?.id || '' }); setShowAddModal(true); }}
+              className="flex items-center space-x-2 px-5 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all"
+            >
+              <Plus size={16} />
+              <span>Novo Paciente</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
@@ -342,19 +440,37 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
                         <Edit3 size={13} />
                         <span>Editar Cadastro</span>
                       </button>
-                      {selectedPatient.patientPasswordSet && (
-                        <button
-                          onClick={handleResetPatientPassword}
-                          className="flex items-center space-x-1.5 px-4 py-2 bg-orange-50 text-orange-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-100 transition-all"
-                        >
-                          <RefreshCw size={13} />
-                          <span>Resetar Senha Portal</span>
-                        </button>
-                      )}
                     </>
                   )}
                 </div>
               </div>
+
+              {isAdmin && (
+                <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">Acesso do paciente</p>
+                      <p className="text-xs text-slate-600 mt-1">
+                        {selectedPatient.email ? `E-mail cadastrado: ${selectedPatient.email}` : 'Cadastre um e-mail para enviar o link de acesso.'}
+                      </p>
+                      {resetFeedback?.patientId === selectedPatient.id && (
+                        <p className={`text-xs font-bold mt-2 ${resetFeedback.kind === 'success' ? 'text-emerald-700' : 'text-red-600'}`}>
+                          {resetFeedback.message}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleResetPatientPassword(selectedPatient as PatientAuthMetadata)}
+                      disabled={!selectedPatient.email || resettingPatientId !== null}
+                      className="shrink-0 flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {resettingPatientId === selectedPatient.id ? <RefreshCw size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+                      <span>{resettingPatientId === selectedPatient.id ? 'Enviando...' : 'Enviar link para criar/redefinir senha'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Dados básicos */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

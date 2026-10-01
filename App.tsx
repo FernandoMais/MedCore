@@ -47,6 +47,11 @@ import PatientSelfRegister from './components/PatientSelfRegister';
 import PatientLogin from './components/PatientLogin';
 import PatientPortal from './components/PatientPortal';
 import FinancialModule from './components/FinancialModule';
+import PatientPasswordReset from './components/PatientPasswordReset';
+import {
+  registerPatient, loadPatientPortal, bookPatientAppointment, logoutPatient,
+  isPatientRecoveryPage, isPatientConfirmationPage, clearPatientCallbackUrl,
+} from './services/patientAuth';
 
 type View = 'dashboard' | 'patients' | 'agenda' | 'consultation' | 'settings' | 'doctors' | 'backups' | 'reports' | 'medications' | 'finance';
 type AppScreen = 'landing' | 'login' | 'self-register' | 'app';
@@ -64,6 +69,9 @@ const App: React.FC = () => {
   const [showSelfRegister, setShowSelfRegister] = useState(false);
   const [showPatientLogin, setShowPatientLogin] = useState(false);
   const [loggedPatient, setLoggedPatient] = useState<import('./types').Patient | null>(null);
+  const [patientPortalData, setPatientPortalData] = useState<{ doctors: Doctor[]; appointments: Appointment[] }>({ doctors: [], appointments: [] });
+  const [showPatientRecovery, setShowPatientRecovery] = useState(isPatientRecoveryPage);
+  const [showPatientConfirmation, setShowPatientConfirmation] = useState(isPatientConfirmationPage);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -124,6 +132,43 @@ const App: React.FC = () => {
     setShowLanding(true);
   };
 
+  const returnHome = () => {
+    handleLogout();
+    logoutPatient().catch(() => {});
+    setLoggedPatient(null);
+    setPatientPortalData({ doctors: [], appointments: [] });
+    setShowPatientLogin(false);
+    setShowSelfRegister(false);
+    setShowPatientRecovery(false);
+    setShowPatientConfirmation(false);
+    clearPatientCallbackUrl();
+  };
+
+  if (showPatientRecovery) {
+    return <PatientPasswordReset onBack={returnHome} />;
+  }
+
+  if (showPatientConfirmation) {
+    const callbackHasError = new URLSearchParams(window.location.hash.slice(1)).has('error')
+      || new URLSearchParams(window.location.search).has('error');
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
+        <div className="bg-white rounded-3xl shadow-lg p-8 max-w-lg text-center">
+          <ShieldCheck size={40} className="mx-auto text-blue-600 mb-4" />
+          <h1 className="text-2xl font-black text-slate-800">Acesso do paciente</h1>
+          <p className="text-slate-600 mt-4">
+            {callbackHasError
+              ? 'O link de confirmação é inválido ou expirou. Entre em contato com a clínica para receber um novo link.'
+              : 'A confirmação será validada no seu próximo acesso. Entre com seu CPF e a senha criada no cadastro.'}
+          </p>
+          <button onClick={returnHome} className="mt-6 bg-blue-600 text-white rounded-xl px-5 py-3 font-bold">
+            Voltar à página inicial
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center">
@@ -138,10 +183,8 @@ const App: React.FC = () => {
   if (showSelfRegister) {
     return (
       <PatientSelfRegister
-        onBack={() => setShowSelfRegister(false)}
-        onSubmit={(newPatient) => {
-          setDb(prev => ({ ...prev, patients: [newPatient, ...(prev.patients || [])] }));
-        }}
+        onBack={returnHome}
+        onSubmit={registerPatient}
       />
     );
   }
@@ -151,29 +194,29 @@ const App: React.FC = () => {
       return (
         <PatientPortal
           patient={loggedPatient}
-          doctors={db.doctors || []}
-          appointments={(db.appointments || []).filter(a => a.patientId === loggedPatient.id)}
-          onAddAppointment={(appt) => {
-            setDb(prev => ({ ...prev, appointments: [appt, ...(prev.appointments || [])] }));
-            setLoggedPatient(prev => prev ? { ...prev } : prev);
+          doctors={patientPortalData.doctors}
+          appointments={patientPortalData.appointments}
+          onAddAppointment={async (appt) => {
+            const saved = await bookPatientAppointment(loggedPatient, appt);
+            setPatientPortalData(prev => ({ ...prev, appointments: [saved, ...prev.appointments] }));
           }}
-          onLogout={() => { setLoggedPatient(null); setShowPatientLogin(false); setShowLanding(true); }}
+          onLogout={returnHome}
         />
       );
     }
     return (
       <PatientLogin
-        patients={db.patients || []}
-        onLogin={(patient) => setLoggedPatient(patient)}
-        onSetPassword={(patientId, password) => {
-          setDb(prev => ({
-            ...prev,
-            patients: (prev.patients || []).map(p =>
-              p.id === patientId ? { ...p, patientPassword: password, patientPasswordSet: true } : p
-            )
-          }));
+        onLogin={async (patient) => {
+          try {
+            const portal = await loadPatientPortal(patient);
+            setPatientPortalData(portal);
+            setLoggedPatient(patient);
+          } catch (error) {
+            await logoutPatient();
+            throw error;
+          }
         }}
-        onBack={() => { setShowPatientLogin(false); setShowLanding(true); }}
+        onBack={returnHome}
       />
     );
   }
@@ -554,6 +597,7 @@ const App: React.FC = () => {
           )}
           {currentView === 'patients' && (
             <PatientManager 
+              onBackHome={returnHome}
               patients={filteredPatients} 
               setPatients={(newP) => setDb(prev => {
                 const patientsList = prev.patients || [];

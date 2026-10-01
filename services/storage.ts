@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { MOCK_PATIENTS, MOCK_DOCTORS, MOCK_APPOINTMENTS } from '../constants';
 import { supabase } from './supabase';
+import { removeLegacyPatientPassword } from './patientCredentials';
 
 const DB_KEY = 'medcore_pro_db_v3';
 
@@ -164,7 +165,12 @@ export const storage = {
         const finalUsers = hasAdmin ? users : [...DEFAULT_DB.users.filter(u => u.username === 'admin'), ...users];
         return {
           users: finalUsers.map((user: User) => ({ ...user, clinicId: user.clinicId || CLINIC_ID })),
-          patients: Array.isArray(parsed.patients) ? parsed.patients : DEFAULT_DB.patients,
+          patients: Array.isArray(parsed.patients)
+            ? parsed.patients.map((patient: Patient) => ({
+                ...removeLegacyPatientPassword(patient),
+                patientPasswordSet: Boolean(patient.authUserId),
+              }))
+            : DEFAULT_DB.patients,
           doctors: Array.isArray(parsed.doctors) ? parsed.doctors : DEFAULT_DB.doctors,
           appointments: Array.isArray(parsed.appointments) ? normalizeAppointments(parsed.appointments) : DEFAULT_DB.appointments,
           medicalRecords: Array.isArray(parsed.medicalRecords) ? parsed.medicalRecords : DEFAULT_DB.medicalRecords,
@@ -210,9 +216,27 @@ export const storage = {
       };
 
       assignIfNonEmpty('patients', await supabase.from('patients').select('*'));
+      if (cloudData.patients) {
+        cloudData.patients = cloudData.patients.map(patient => ({
+          ...removeLegacyPatientPassword(patient),
+          patientPasswordSet: Boolean(patient.authUserId),
+        }));
+      }
       assignIfNonEmpty('doctors', await supabase.from('doctors').select('*'));
       assignIfNonEmpty('appointments', await supabase.from('appointments').select('*'));
-      assignIfNonEmpty('users', await supabase.from('users').select('*'));
+      const profiles = await supabase.from('users')
+        .select('id,username,name,role,doctor_id,clinicId,authUserId');
+      if (!profiles.error && profiles.data?.length) {
+        // Keep legacy offline credentials only on this browser. Never download
+        // another staff member's password or use it as a cloud profile field.
+        const localUsers = storage.initLocal().users;
+        cloudData.users = profiles.data.map(profile => ({
+          ...profile,
+          doctorId: profile.doctor_id || undefined,
+          password: localUsers.find(user => user.id === profile.id)?.password || '',
+          senhaAcesso: localUsers.find(user => user.id === profile.id)?.senhaAcesso,
+        })) as User[];
+      }
       assignIfNonEmpty('medications', await supabase.from('medications').select('*'));
       assignIfNonEmpty('sigilousNotes', await supabase.from('sigilous_notes').select('*'));
       const financialTables: Record<string, keyof FinancialData> = {
@@ -253,7 +277,9 @@ export const storage = {
 
   save: (db: AppDatabase) => {
     try {
-      localStorage.setItem(DB_KEY, JSON.stringify(db));
+      localStorage.setItem(DB_KEY, JSON.stringify({
+        ...db, patients: db.patients.map(removeLegacyPatientPassword),
+      }));
     } catch (e) {
       console.error("Falha ao salvar localmente:", e);
     }
@@ -262,10 +288,41 @@ export const storage = {
   syncToCloud: async (db: AppDatabase, clinicId: string) => {
     const authorizedClinicId = requireClinicId(clinicId);
     try {
-      if (db.patients?.length > 0) await supabase.from('patients').upsert(db.patients);
-      if (db.doctors?.length > 0) await supabase.from('doctors').upsert(db.doctors);
-      if (db.appointments?.length > 0) await supabase.from('appointments').upsert(db.appointments);
-      if (db.users?.length > 0) await supabase.from('users').upsert(db.users);
+      if (db.patients?.length > 0) {
+        const rows = db.patients.map(patient => {
+          const { authUserId, pendingAuthUserId, portalEnrollmentPending, patientPasswordSet, ...row } = removeLegacyPatientPassword(patient);
+          return { ...row, clinicId: row.clinicId || authorizedClinicId };
+        }).filter(patient => patient.clinicId === authorizedClinicId);
+        const { error } = await supabase.from('patients').upsert(rows);
+        if (error) throw error;
+      }
+      if (db.doctors?.length > 0) {
+        const rows = db.doctors.map(doctor => ({ ...doctor, clinicId: doctor.clinicId || authorizedClinicId }))
+          .filter(doctor => doctor.clinicId === authorizedClinicId);
+        const { error } = await supabase.from('doctors').upsert(rows);
+        if (error) throw error;
+      }
+      if (db.appointments?.length > 0) {
+        const rows = db.appointments.map(appointment => ({
+          ...appointment,
+          clinicId: appointment.clinicId || db.patients.find(p => p.id === appointment.patientId)?.clinicId || authorizedClinicId,
+        })).filter(appointment => appointment.clinicId === authorizedClinicId);
+        const { error } = await supabase.from('appointments').upsert(rows);
+        if (error) throw error;
+      }
+      if (db.users?.length > 0) {
+        const { data: auth, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        const actor = db.users.find(user => user.authUserId === auth.user?.id);
+        if (actor?.role === UserRole.ADMIN) {
+          const rows = db.users.filter(user => user.clinicId === authorizedClinicId).map(user => ({
+            id: user.id, username: user.username, name: user.name, role: user.role,
+            doctor_id: user.doctorId || null, clinicId: authorizedClinicId,
+          }));
+          const { error } = await supabase.from('users').upsert(rows);
+          if (error) throw error;
+        }
+      }
       if (db.medications?.length > 0) await supabase.from('medications').upsert(db.medications);
       if (db.sigilousNotes?.length > 0) await supabase.from('sigilous_notes').upsert(db.sigilousNotes);
       if (db.financial) {
@@ -306,7 +363,9 @@ export const storage = {
   },
 
   exportBackup: (db?: AppDatabase) => {
-    const data = JSON.stringify(db ? { ...db, lastBackup: new Date().toISOString() } : JSON.parse(localStorage.getItem(DB_KEY) || 'null'));
+    const source = db ? { ...db, lastBackup: new Date().toISOString() } : JSON.parse(localStorage.getItem(DB_KEY) || 'null');
+    if (source?.patients) source.patients = source.patients.map(removeLegacyPatientPassword);
+    const data = JSON.stringify(source);
     if (!data || data === 'null') {
       alert("Nenhum dado disponível para exportar.");
       return;
@@ -328,7 +387,8 @@ export const storage = {
           const content = e.target?.result as string;
           const data = JSON.parse(content);
           if (data && Array.isArray(data.patients) && Array.isArray(data.doctors) && Array.isArray(data.users)) {
-            localStorage.setItem(DB_KEY, content);
+            data.patients = data.patients.map(removeLegacyPatientPassword);
+            localStorage.setItem(DB_KEY, JSON.stringify(data));
             resolve();
           } else {
             reject(new Error("Arquivo de backup inválido ou corrompido."));

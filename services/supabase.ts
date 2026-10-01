@@ -13,7 +13,12 @@ if (!isSupabaseConfigured) {
 }
 
 export const supabase: SupabaseClient = isSupabaseConfigured
-  ? createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!)
+  ? createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+      auth: {
+        // Patient recovery tokens belong to the isolated patient Auth client.
+        detectSessionInUrl: !new URLSearchParams(window.location.search).has('patient-auth'),
+      },
+    })
   : (createStub() as unknown as SupabaseClient);
 
 function createStub() {

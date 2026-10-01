@@ -1,0 +1,2 @@
+[functions.patient-access]
+verify_jwt = false

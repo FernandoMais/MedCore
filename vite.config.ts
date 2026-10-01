@@ -10,6 +10,14 @@ export default defineConfig(({ mode }) => {
         port: 5000,
         host: '0.0.0.0',
         allowedHosts: true,
+        watch: {
+          // SQL, Edge sources and tool/test output are not frontend modules.
+          // Watching them reloads patient forms while setup/tests are running.
+          ignored: [
+            '**/.cache/**', '**/.local/**', '**/supabase/**', '**/docs/**',
+            '**/tests/**', '**/test-results/**', '**/playwright-report/**', '**/*.sql',
+          ],
+        },
       },
       plugins: [
         react(),

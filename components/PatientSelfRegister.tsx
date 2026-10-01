@@ -2,27 +2,23 @@ import React, { useState } from 'react';
 import {
   ShieldCheck,
   User as UserIcon,
-  FileText,
-  Calendar,
   Mail,
-  Phone,
   MapPin,
-  Hash,
-  Home,
-  Building2,
-  Navigation,
-  DollarSign,
   CreditCard,
   CheckCircle2,
   AlertCircle,
   ArrowLeft,
   Loader2,
-  ChevronRight
+  ChevronRight,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Patient, Gender } from '../types';
+import { isValidCpf, isValidPatientPassword, normalizeCpf } from '../services/patientAuth';
 
 interface PatientSelfRegisterProps {
-  onSubmit: (patient: Patient) => void;
+  onSubmit: (patient: Patient, password: string) => Promise<void>;
   onBack: () => void;
 }
 
@@ -46,6 +42,9 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const set = (field: keyof typeof EMPTY_FORM) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(prev => ({ ...prev, [field]: e.target.value }));
@@ -71,7 +70,7 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
 
   const validate = () => {
     if (!form.name.trim()) return 'Nome completo é obrigatório.';
-    if (form.cpf.replace(/\D/g, '').length < 11) return 'CPF inválido.';
+    if (!isValidCpf(normalizeCpf(form.cpf))) return 'Informe um CPF brasileiro válido.';
     if (!form.birthDate) return 'Data de nascimento é obrigatória.';
     if (!form.email.includes('@')) return 'E-mail inválido.';
     if (form.phone.replace(/\D/g, '').length < 10) return 'Celular inválido.';
@@ -79,6 +78,8 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
     if (!form.city.trim()) return 'Cidade é obrigatória.';
     if (!form.paymentValue.trim()) return 'Informe o valor pago.';
     if (!form.paymentSender.trim()) return 'Informe o nome de quem realizou o pagamento.';
+    if (!isValidPatientPassword(password)) return 'A senha deve ter pelo menos 8 caracteres.';
+    if (password !== confirmPassword) return 'As senhas não coincidem.';
     return null;
   };
 
@@ -87,9 +88,6 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
     setError('');
     const err = validate();
     if (err) { setError(err); return; }
-
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
 
     const address = [
       form.streetName.trim(),
@@ -102,7 +100,7 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
     const patient: Patient = {
       id: `patient-${crypto.randomUUID()}`,
       name: form.name.trim(),
-      cpf: form.cpf,
+      cpf: normalizeCpf(form.cpf),
       birthDate: form.birthDate,
       gender: Gender.OTHER,
       email: form.email.trim(),
@@ -126,9 +124,17 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
       selfRegistered: true,
     };
 
-    onSubmit(patient);
-    setLoading(false);
-    setDone(true);
+    setLoading(true);
+    try {
+      await onSubmit(patient, password);
+      setPassword('');
+      setConfirmPassword('');
+      setDone(true);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Não foi possível concluir o cadastro. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (done) {
@@ -143,13 +149,13 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
             Seus dados foram enviados com sucesso para a clínica.
           </p>
           <p className="text-slate-400 text-sm font-medium mb-10">
-            Nossa equipe entrará em contato para confirmar seu agendamento. Obrigado!
+            Enviamos um e-mail de confirmação. Confirme seu endereço de e-mail para ativar o acesso e, em seguida, entre no portal com seu CPF e senha.
           </p>
           <button
             onClick={onBack}
             className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-black transition-all active:scale-95"
           >
-            Voltar à Página Inicial
+            Voltar à página inicial
           </button>
         </div>
       </div>
@@ -174,7 +180,7 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
           className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 text-xs font-black uppercase tracking-widest transition-colors"
         >
           <ArrowLeft size={16} />
-          <span className="hidden sm:inline">Voltar</span>
+          <span>Voltar à página inicial</span>
         </button>
       </nav>
 
@@ -340,6 +346,50 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
                   value={form.paymentSender}
                   onChange={set('paymentSender')}
                   placeholder="Nome como aparece no comprovante"
+                  className={inputCls}
+                  required
+                />
+              </Field>
+            </div>
+          </Section>
+
+          <Section icon={<Lock size={18} className="text-blue-600" />} title="Acesso ao Portal">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <Field label="Criar senha" required>
+                <div className="relative">
+                  <input
+                    id="patient-register-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Mínimo de 8 caracteres"
+                    autoComplete="new-password"
+                    minLength={8}
+                    aria-label="Criar senha, mínimo de 8 caracteres"
+                    className={`${inputCls} pr-12`}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(value => !value)}
+                    aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                    aria-pressed={showPassword}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
+              </Field>
+              <Field label="Confirmar senha" required>
+                <input
+                  id="patient-register-password-confirm"
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Digite a senha novamente"
+                  autoComplete="new-password"
+                  minLength={8}
+                  aria-label="Confirmar senha"
                   className={inputCls}
                   required
                 />

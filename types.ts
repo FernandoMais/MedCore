@@ -8,6 +8,7 @@ export enum UserRole {
 
 export interface User {
   id: string;
+  authUserId?: string;
   username: string;
   password: string;
   name: string;
@@ -40,6 +41,7 @@ export interface DoctorSchedule {
 
 export interface Doctor {
   id: string;
+  clinicId?: string;
   name: string;
   crm: string;
   specialty: string;
@@ -68,6 +70,11 @@ export interface MedicalFile {
 
 export interface Patient {
   id: string;
+  clinicId?: string;
+  /** Set only by the trusted patient-access backend. Never a credential. */
+  authUserId?: string;
+  pendingAuthUserId?: string;
+  portalEnrollmentPending?: boolean;
   name: string;
   birthDate: string;
   gender: Gender;
@@ -91,12 +98,12 @@ export interface Patient {
   paymentValue?: string;
   paymentSender?: string;
   selfRegistered?: boolean;
-  patientPassword?: string;
   patientPasswordSet?: boolean;
 }
 
 export interface Appointment {
   id: string;
+  clinicId?: string;
   patientId: string;
   doctorId: string;
   date: string;
