@@ -9,6 +9,8 @@ lerna-debug.log*
 
 node_modules
 .migration-backups/
+# Database backups uploaded for migration may contain confidential data.
+attached_assets/**/*.[gG][zZ]
 dist
 dist-ssr
 *.local
