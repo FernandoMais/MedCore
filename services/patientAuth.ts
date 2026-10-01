@@ -66,21 +66,22 @@ async function invoke(action: string, body: object, staff = false): Promise<any>
   return data;
 }
 
-export async function registerPatient(patient: Patient, password: string): Promise<void> {
+export async function registerPatient(patient: Patient, password: string): Promise<{ confirmationEmailSent: boolean }> {
   if (!isValidCpf(patient.cpf)) throw new Error('Informe um CPF válido.');
   if (!isValidPatientPassword(password)) throw new Error('A senha deve ter entre 8 e 128 caracteres.');
   const {
     name, cpf, birthDate, gender, email, phone, address, streetName, streetNumber,
-    neighborhood, city, zipCode, paymentValue, paymentSender,
+    neighborhood, city, zipCode,
   } = patient;
-  await invoke('register', {
+  const result = await invoke('register', {
     patient: {
       name, cpf: normalizeCpf(cpf), birthDate, gender, email: email.trim().toLowerCase(),
-      phone, address, streetName, streetNumber, neighborhood, city, zipCode, paymentValue, paymentSender,
+      phone, address, streetName, streetNumber, neighborhood, city, zipCode,
     },
     password,
     redirectTo: redirectUrl('confirm'),
   });
+  return { confirmationEmailSent: result.confirmationEmailSent !== false };
 }
 
 export async function loginPatient(cpf: string, password: string): Promise<Patient> {

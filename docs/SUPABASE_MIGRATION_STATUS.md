@@ -27,8 +27,12 @@ vazias, sem chamadas ao projeto antigo. Só as configurações iniciais da clín
 foram persistidas; nenhum registro antigo ou de demonstração foi importado.
 O armazenamento antigo foi preservado no teste isolado.
 
-Ativação remota do portal e serviços de e-mail continuam com suas próprias
-etapas de configuração/validação. Não importar o backup sem nova autorização.
+O serviço remoto de pacientes foi implantado e o cadastro sem pagamentos foi
+verificado no navegador contra o banco real. Ele cria conta Auth e paciente,
+sem consulta ou cobrança. A confirmação por e-mail continua obrigatória:
+SMTP ainda não está configurado e a interface informa acesso pendente quando
+o envio não ocorre. Os testes temporários foram removidos somente por seus
+identificadores exclusivos. Não importar o backup sem nova autorização.
 
 Os testes unitários passaram e a construção de produção foi conferida.
 O operador de criação inicial não deve ser repetido em uma clínica já iniciada:

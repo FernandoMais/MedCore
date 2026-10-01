@@ -184,9 +184,7 @@ Cadastro:
     "email": "patient@example.com",
     "phone": "(11) 99999-0000",
     "streetName": "Rua Exemplo",
-    "city": "São Paulo",
-    "paymentValue": "150,00",
-    "paymentSender": "Nome de quem pagou"
+    "city": "São Paulo"
   },
   "password": "Strong!Pass8",
   "redirectTo": "https://portal.example.com/patient-auth/confirm"
@@ -195,11 +193,17 @@ Cadastro:
 
 O cadastro aceita campos públicos do paciente, mas não aceita `id`,
 `clinicId`, `authUserId`, `portalEnrollmentPending`, senha interna ou arquivos.
-Exige nome, CPF válido, nascimento, e-mail, telefone, endereço, cidade e os
-campos de pagamento já exigidos pelo formulário. A senha deve ter entre
+Exige nome, CPF válido, nascimento, e-mail, telefone, endereço e cidade.
+Não aceita valor pago ou identificação de pagador; o cadastro cria somente
+a conta Auth e o registro do paciente, sem consulta ou lançamento financeiro.
+A senha deve ter entre
 oito e 128 caracteres; use uma senha longa e exclusiva. A confirmação
 da senha deve ser exigida pelo cliente. Nenhuma senha é gravada em `patients`.
-Após sucesso, a resposta é `{"requiresConfirmation":true}`.
+Após sucesso, a resposta informa `requiresConfirmation=true` e
+`confirmationEmailSent`. Se o envio falhar depois de persistir o paciente e
+a associação privada, o cadastro continua salvo e a interface informa acesso
+pendente de confirmação. Isso não desativa a confirmação de e-mail nem permite
+login sem comprovação de identidade.
 
 Login:
 
@@ -250,7 +254,7 @@ somente em e-mail ou em `identities`.
   limite independente por CPF continua ativo quando não há IP identificável.
 - A busca por CPF ocorre somente pelo cliente service role no servidor. Esse
   cliente nunca pode ser reutilizado no navegador.
-- A função mantém campos de endereço e pagamento do cadastro. Uploads não são
+- A função mantém campos de endereço, mas não captura pagamentos. Uploads não são
   aceitos no cadastro (`files` deve estar vazio).
 - A view `patient_portal_doctors` expõe somente `id`, `name`, `crm`,
   `specialty`, `clinicId` e `availableTimes`; papéis de paciente não leem
@@ -261,7 +265,10 @@ somente em e-mail ou em `identities`.
   data inválida/passada, sala, preço ou regra de repasse definidos pelo cliente.
 - Testes puros de validação podem ser executados em ambiente Deno com
   `deno test supabase/functions/patient-access/index_test.ts`.
-- Esta alteração não aplica migração nem implanta a função, não provisiona
-  vínculos de equipe, não configura SMTP/templates/redirects e não altera
-  fluxos de interface. Revise e conclua essas etapas no projeto Supabase alvo
-  antes de liberar o portal.
+- A função foi implantada no destino novo com clínica autoritativa, CORS e
+  redirects da origem de desenvolvimento. O cadastro real foi verificado com
+  registro temporário e limpeza restrita a esse registro: conta e paciente foram
+  criados sem pagamento, consulta ou lançamento financeiro. SMTP de produção
+  continua pendente; não anunciar acesso ativo enquanto a confirmação não puder
+  ser entregue. Ao publicar o app, acrescente a origem publicada confiável às
+  configurações; não aceite origens arbitrárias enviadas pelo navegador.

@@ -30,8 +30,6 @@ const PATIENT_FIELDS = new Set([
   "preExistingConditions",
   "primaryDoctorId",
   "files",
-  "paymentValue",
-  "paymentSender",
   "selfRegistered",
 ]);
 
@@ -183,7 +181,7 @@ function validStringArray(value: unknown, maxItems = 100): value is string[] {
     value.every((item) => typeof item === "string" && item.length <= 2000);
 }
 
-function sanitizePatient(input: unknown): JsonObject | null {
+export function sanitizePatient(input: unknown): JsonObject | null {
   if (!isPlainObject(input)) return null;
   if (Object.keys(input).some((key) => !PATIENT_FIELDS.has(key))) return null;
 
@@ -194,9 +192,7 @@ function sanitizePatient(input: unknown): JsonObject | null {
     !isEmail(input.email) ||
     !requiredText(input.phone, 40) ||
     !requiredText(input.streetName, 200) ||
-    !requiredText(input.city, 120) ||
-    !requiredText(input.paymentValue, 80) ||
-    !requiredText(input.paymentSender, 200)
+    !requiredText(input.city, 120)
   ) return null;
 
   const optionalTextFields: Array<[string, number]> = [
@@ -209,8 +205,6 @@ function sanitizePatient(input: unknown): JsonObject | null {
     ["bloodType", 20],
     ["history", 10000],
     ["primaryDoctorId", 200],
-    ["paymentValue", 80],
-    ["paymentSender", 200],
   ];
   if (optionalTextFields.some(([key, max]) => !optionalText(input[key], max))) return null;
   if (input.gender !== undefined && input.gender !== "Masculino" &&
@@ -251,8 +245,6 @@ function sanitizePatient(input: unknown): JsonObject | null {
     createdAt: new Date().toISOString(),
     primaryDoctorId: typeof input.primaryDoctorId === "string" ? input.primaryDoctorId : "",
     files: [],
-    paymentValue: String(input.paymentValue).trim(),
-    paymentSender: String(input.paymentSender).trim(),
     selfRegistered: true,
   };
 }
@@ -626,11 +618,13 @@ async function register(
       email,
       options: { emailRedirectTo: redirectTo },
     });
-    if (resendError) throw new Error("Patient signup confirmation delivery failed.");
 
     pendingPatientId = null;
     newlyCreatedAuthUserId = null;
-    return json({ requiresConfirmation: true });
+    // The account and patient were already durably saved. Failed mail delivery
+    // must not report a failed registration or cause another signup attempt.
+    // Keep email confirmation mandatory; never auto-confirm to bypass SMTP.
+    return json({ requiresConfirmation: true, confirmationEmailSent: !resendError });
   } catch {
     if (pendingEnrollmentPersisted) {
       return json({ error: REGISTRATION_CONFLICT_MESSAGE }, 502);

@@ -4,7 +4,6 @@ import {
   User as UserIcon,
   Mail,
   MapPin,
-  CreditCard,
   CheckCircle2,
   AlertCircle,
   ArrowLeft,
@@ -18,7 +17,7 @@ import { Patient, Gender } from '../types';
 import { isValidCpf, isValidPatientPassword, normalizeCpf } from '../services/patientAuth';
 
 interface PatientSelfRegisterProps {
-  onSubmit: (patient: Patient, password: string) => Promise<void>;
+  onSubmit: (patient: Patient, password: string) => Promise<{ confirmationEmailSent: boolean }>;
   onBack: () => void;
 }
 
@@ -33,8 +32,6 @@ const EMPTY_FORM = {
   neighborhood: '',
   city: '',
   zipCode: '',
-  paymentValue: '',
-  paymentSender: '',
 };
 
 const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onBack }) => {
@@ -45,6 +42,7 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [confirmationEmailSent, setConfirmationEmailSent] = useState(false);
 
   const set = (field: keyof typeof EMPTY_FORM) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(prev => ({ ...prev, [field]: e.target.value }));
@@ -76,8 +74,6 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
     if (form.phone.replace(/\D/g, '').length < 10) return 'Celular inválido.';
     if (!form.streetName.trim()) return 'Rua é obrigatória.';
     if (!form.city.trim()) return 'Cidade é obrigatória.';
-    if (!form.paymentValue.trim()) return 'Informe o valor pago.';
-    if (!form.paymentSender.trim()) return 'Informe o nome de quem realizou o pagamento.';
     if (!isValidPatientPassword(password)) return 'A senha deve ter pelo menos 8 caracteres.';
     if (password !== confirmPassword) return 'As senhas não coincidem.';
     return null;
@@ -111,8 +107,6 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
       neighborhood: form.neighborhood.trim(),
       city: form.city.trim(),
       zipCode: form.zipCode.trim(),
-      paymentValue: form.paymentValue.trim(),
-      paymentSender: form.paymentSender.trim(),
       healthInsurance: '',
       bloodType: '',
       allergies: [],
@@ -126,7 +120,8 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
 
     setLoading(true);
     try {
-      await onSubmit(patient, password);
+      const result = await onSubmit(patient, password);
+      setConfirmationEmailSent(result.confirmationEmailSent);
       setPassword('');
       setConfirmPassword('');
       setDone(true);
@@ -149,7 +144,9 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
             Seus dados foram enviados com sucesso para a clínica.
           </p>
           <p className="text-slate-400 text-sm font-medium mb-10">
-            Enviamos um e-mail de confirmação. Confirme seu endereço de e-mail para ativar o acesso e, em seguida, entre no portal com seu CPF e senha.
+            {confirmationEmailSent
+              ? 'Solicitamos o envio do e-mail de confirmação. Confirme seu endereço para ativar o acesso e, em seguida, entre no portal com seu CPF e senha.'
+              : 'Seu cadastro está salvo, mas não foi possível enviar a confirmação por e-mail. O acesso aguarda ativação; entre em contato com a clínica. Não é necessário cadastrar novamente.'}
           </p>
           <button
             onClick={onBack}
@@ -191,7 +188,7 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
             Faça seu Cadastro
           </h2>
           <p className="text-slate-500 font-medium max-w-lg mx-auto">
-            Preencha seus dados abaixo. Nossa equipe irá analisar e confirmar seu atendimento em breve.
+            Preencha seus dados para registrar-se como paciente e criar seu acesso ao portal. Este cadastro não agenda atendimento nem gera cobrança.
           </p>
         </div>
 
@@ -319,35 +316,6 @@ const PatientSelfRegister: React.FC<PatientSelfRegisterProps> = ({ onSubmit, onB
                   placeholder="00000-000"
                   maxLength={9}
                   className={inputCls}
-                />
-              </Field>
-            </div>
-          </Section>
-
-          {/* Pagamento */}
-          <Section icon={<CreditCard size={18} className="text-violet-600" />} title="Dados do Pagamento">
-            <p className="text-xs text-slate-400 font-medium -mt-2 mb-2">
-              Informe os dados do depósito ou PIX realizado para confirmar seu atendimento.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <Field label="Valor Pago (R$)" required>
-                <input
-                  type="text"
-                  value={form.paymentValue}
-                  onChange={set('paymentValue')}
-                  placeholder="Ex: 150,00"
-                  className={inputCls}
-                  required
-                />
-              </Field>
-              <Field label="Nome Completo de Quem Fez o Depósito/PIX" required>
-                <input
-                  type="text"
-                  value={form.paymentSender}
-                  onChange={set('paymentSender')}
-                  placeholder="Nome como aparece no comprovante"
-                  className={inputCls}
-                  required
                 />
               </Field>
             </div>
