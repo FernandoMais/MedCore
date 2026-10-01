@@ -4,6 +4,7 @@ import { ShieldCheck, Lock, User as UserIcon, AlertCircle, Loader2, Mail, ArrowL
 import { User } from '../types';
 import { loginUser } from '../services/auth';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
+import { freshStartEnabled } from '../services/freshStart';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -42,6 +43,27 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (freshStartEnabled) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotUsername.trim())) {
+        setForgotMessage('Informe seu e-mail cadastrado.');
+        setForgotStatus('error');
+        return;
+      }
+      setForgotStatus('loading');
+      try {
+        if (!isSupabaseConfigured) throw new Error();
+        const { error } = await supabase.auth.resetPasswordForEmail(forgotUsername.trim().toLowerCase(), {
+          redirectTo: `${window.location.origin}${window.location.pathname}?staff-auth=recovery`,
+        });
+        if (error) throw new Error();
+        setForgotStatus('sent');
+        setForgotMessage('Se este e-mail estiver cadastrado e o envio estiver configurado, você receberá um link de redefinição.');
+      } catch {
+        setForgotStatus('error');
+        setForgotMessage('Não foi possível solicitar a redefinição. Confira a conexão e a configuração de e-mail.');
+      }
+      return;
+    }
     if (!forgotUsername.trim()) {
       setForgotMessage('Informe seu nome de usuário.');
       setForgotStatus('error');
@@ -98,15 +120,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Usuário de Acesso</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">{freshStartEnabled ? 'E-mail de Acesso' : 'Usuário de Acesso'}</label>
                   <div className="relative">
                     <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
                     <input
-                      type="text"
+                      type={freshStartEnabled ? 'email' : 'text'}
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none text-sm font-bold transition-all"
-                      placeholder="Seu nome de usuário"
+                      placeholder={freshStartEnabled ? 'Seu e-mail cadastrado' : 'Seu nome de usuário'}
                     />
                   </div>
                 </div>
@@ -161,7 +183,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
                 </button>
                 <div>
                   <h2 className="font-black text-slate-800 text-base">Redefinir Senha</h2>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Informe seu nome de usuário</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{freshStartEnabled ? 'Informe seu e-mail cadastrado' : 'Informe seu nome de usuário'}</p>
                 </div>
               </div>
 

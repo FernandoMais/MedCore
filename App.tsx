@@ -48,6 +48,8 @@ import PatientLogin from './components/PatientLogin';
 import PatientPortal from './components/PatientPortal';
 import FinancialModule from './components/FinancialModule';
 import PatientPasswordReset from './components/PatientPasswordReset';
+import StaffPasswordReset from './components/StaffPasswordReset';
+import { freshStartEnabled } from './services/freshStart';
 import {
   registerPatient, loadPatientPortal, bookPatientAppointment, logoutPatient,
   isPatientRecoveryPage, isPatientConfirmationPage, clearPatientCallbackUrl,
@@ -72,6 +74,8 @@ const App: React.FC = () => {
   const [patientPortalData, setPatientPortalData] = useState<{ doctors: Doctor[]; appointments: Appointment[] }>({ doctors: [], appointments: [] });
   const [showPatientRecovery, setShowPatientRecovery] = useState(isPatientRecoveryPage);
   const [showPatientConfirmation, setShowPatientConfirmation] = useState(isPatientConfirmationPage);
+  const [showStaffRecovery, setShowStaffRecovery] = useState(() =>
+    freshStartEnabled && new URLSearchParams(window.location.search).get('staff-auth') === 'recovery');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -141,11 +145,16 @@ const App: React.FC = () => {
     setShowSelfRegister(false);
     setShowPatientRecovery(false);
     setShowPatientConfirmation(false);
+    setShowStaffRecovery(false);
     clearPatientCallbackUrl();
   };
 
   if (showPatientRecovery) {
     return <PatientPasswordReset onBack={returnHome} />;
+  }
+
+  if (showStaffRecovery) {
+    return <StaffPasswordReset onBack={returnHome} />;
   }
 
   if (showPatientConfirmation) {
@@ -573,13 +582,12 @@ const App: React.FC = () => {
             </div>
             <button className="relative p-2 text-slate-400 hover:text-blue-600 transition-colors">
               <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
             </button>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 bg-slate-50/50">
-          {currentView === 'dashboard' && <Dashboard patientsCount={filteredPatients.length} appointments={filteredAppointments} />}
+          {currentView === 'dashboard' && <Dashboard patientsCount={filteredPatients.length} appointments={filteredAppointments} doctorsCount={(db.doctors || []).length} />}
           {currentView === 'agenda' && (
             <Agenda 
               appointments={filteredAppointments} 

@@ -1,5 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { User } from '../types';
+import { freshStartEnabled } from './freshStart';
+import { loginFreshStaff } from './freshStaffAuth';
 
 const synthEmail = (username: string) => `${username.trim().toLowerCase()}@medcore.local`;
 
@@ -15,6 +17,7 @@ export async function loginUser(
   password: string,
   users: User[]
 ): Promise<{ ok: true; user: User } | { ok: false; error: string }> {
+  if (freshStartEnabled) return loginFreshStaff(username, password);
   const localUser = users.find(
     u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
   );

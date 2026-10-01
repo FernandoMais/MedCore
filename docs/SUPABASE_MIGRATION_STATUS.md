@@ -1,5 +1,29 @@
 # Situação da transferência Supabase
 
+## Decisão atual: começar do zero
+
+Em 01/10/2026, o usuário autorizou iniciar o aplicativo novo sem importar
+os registros antigos. A reconciliação/importação descrita abaixo passou
+a ser histórica, não a próxima etapa autorizada.
+
+O código e as melhorias existentes serão mantidos. O projeto antigo,
+o backup fornecido e o armazenamento antigo do navegador não serão apagados.
+A instalação limpa usa outra chave de armazenamento, sem copiar dados antigos
+ou dados de demonstração. O login dessa instalação exige Supabase Auth e
+um perfil de equipe vinculado pelo operador à clínica nova.
+
+Conferência somente leitura do destino: 20 tabelas protegidas por RLS,
+zero registros do aplicativo, zero contas Auth e zero objetos Storage.
+O utilitário `scripts/setup-fresh-admin.mjs --check` confirmou esse estado.
+`--apply-admin` exige conexão nova, credenciais fornecidas por Secrets e
+destino ainda vazio; cria somente o primeiro administrador e confere login/RLS.
+
+**Ainda aguardando:** URL/chave pública do destino e credenciais escolhidas
+para o primeiro administrador pelo formulário seguro. A conexão antiga é
+recusada no modo de instalação limpa; nenhuma conta foi criada até aqui.
+Ativação remota do portal e serviços de e-mail continuam com suas próprias
+etapas de configuração/validação. Não importar o backup sem nova autorização.
+
 ## Concluído: estrutura do destino
 
 O projeto de destino confirmado pelo usuário é `zktvrcaeztmzmsdjcjsa`.

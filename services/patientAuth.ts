@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Appointment, AppointmentStatus, Doctor, Patient } from '../types';
 import { isSupabaseConfigured, supabase } from './supabase';
+import { freshStartEnabled, freshTargetRef, freshClinicId } from './freshStart';
 import { isValidCpf, isValidPatientPassword, normalizeCpf, removeLegacyPatientPassword } from './patientCredentials';
 
 export { isValidCpf, isValidPatientPassword, normalizeCpf } from './patientCredentials';
@@ -19,7 +20,9 @@ const recoveryProof = callbackKind === 'recovery'
 const patientSupabase = isSupabaseConfigured
   ? createClient(import.meta.env.VITE_SUPABASE_URL.trim(), import.meta.env.VITE_SUPABASE_ANON_KEY.trim(), {
       auth: {
-        storageKey: 'medcore-patient-auth',
+        storageKey: freshStartEnabled
+          ? `medcore-patient-auth-${freshTargetRef}-${freshClinicId}`
+          : 'medcore-patient-auth',
         flowType: 'implicit',
         detectSessionInUrl: callbackKind === 'confirm',
       },

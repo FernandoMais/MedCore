@@ -13,8 +13,9 @@ import {
 import { MOCK_PATIENTS, MOCK_DOCTORS, MOCK_APPOINTMENTS } from '../constants';
 import { supabase } from './supabase';
 import { removeLegacyPatientPassword } from './patientCredentials';
+import { emptyDatabase, freshStartEnabled, localDatabaseKey } from './freshStart';
 
-const DB_KEY = 'medcore_pro_db_v3';
+const DB_KEY = localDatabaseKey();
 
 export interface AppDatabase {
   users: User[];
@@ -154,6 +155,23 @@ const DEFAULT_DB: AppDatabase = {
 
 export const storage = {
   initLocal: (): AppDatabase => {
+    if (freshStartEnabled) {
+      const saved = localStorage.getItem(DB_KEY);
+      if (!saved) return emptyDatabase();
+      let parsed: AppDatabase;
+      try { parsed = JSON.parse(saved); } catch {
+        throw new Error('O armazenamento da nova instalação está inválido. Nenhum dado antigo foi carregado.');
+      }
+      if (!parsed || !Array.isArray(parsed.patients) || !Array.isArray(parsed.doctors)
+        || !Array.isArray(parsed.users) || !parsed.financial) {
+        throw new Error('O armazenamento da nova instalação está incompleto. Nenhum dado antigo foi carregado.');
+      }
+      return {
+        ...parsed,
+        users: parsed.users.map(user => ({ ...user, password: '', senhaAcesso: undefined })),
+        patients: parsed.patients.map(removeLegacyPatientPassword),
+      };
+    }
     try {
       const saved = localStorage.getItem(DB_KEY);
       if (saved) {
@@ -252,7 +270,9 @@ export const storage = {
         financial_billing_records: 'billingRecords',
         financial_settings: 'settings',
       };
-      const financial = { ...DEFAULT_FINANCIAL } as FinancialData;
+      const financial = freshStartEnabled
+        ? emptyDatabase().financial
+        : { ...DEFAULT_FINANCIAL } as FinancialData;
       let loadedFinancialTable = false;
       for (const [table, key] of Object.entries(financialTables)) {
         const result = await supabase.from(table).select('*').eq('clinicId', authorizedClinicId);
@@ -279,6 +299,9 @@ export const storage = {
     try {
       localStorage.setItem(DB_KEY, JSON.stringify({
         ...db, patients: db.patients.map(removeLegacyPatientPassword),
+        ...(freshStartEnabled ? {
+          users: db.users.map(user => ({ ...user, password: '', senhaAcesso: undefined })),
+        } : {}),
       }));
     } catch (e) {
       console.error("Falha ao salvar localmente:", e);

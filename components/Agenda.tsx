@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { freshStartEnabled } from '../services/freshStart';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -70,9 +71,9 @@ const Agenda: React.FC<AgendaProps> = ({
     time: '09:00',
     type: 'Consulta' as const,
     room: 'Consultório 01',
-    serviceValue: '350',
+    serviceValue: freshStartEnabled ? '0' : '350',
     repassRuleType: 'percentage' as const,
-    repassRuleValue: '60',
+    repassRuleValue: freshStartEnabled ? '0' : '60',
   });
 
   const createId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;

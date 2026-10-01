@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { freshStartEnabled } from '../services/freshStart';
 import {
   Calendar,
   Clock,
@@ -91,8 +92,10 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
         type: selectedType,
         status: AppointmentStatus.SCHEDULED,
         room: 'A definir',
-        serviceValue: selectedType === 'Retorno' ? 180 : 350,
-        repassRule: { type: 'percentage', value: 60 },
+        ...(freshStartEnabled ? {} : {
+          serviceValue: selectedType === 'Retorno' ? 180 : 350,
+          repassRule: { type: 'percentage' as const, value: 60 },
+        }),
       };
 
       await onAddAppointment(appt);

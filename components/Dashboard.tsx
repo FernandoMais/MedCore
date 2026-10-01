@@ -14,26 +14,30 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Appointment, AppointmentStatus } from '../types';
-import { MOCK_DOCTORS } from '../constants';
 
 interface DashboardProps {
   patientsCount: number;
   appointments: Appointment[];
+  doctorsCount: number;
 }
 
-const data = [
-  { name: 'Seg', total: 12 },
-  { name: 'Ter', total: 18 },
-  { name: 'Qua', total: 15 },
-  { name: 'Qui', total: 22 },
-  { name: 'Sex', total: 20 },
-  { name: 'Sáb', total: 8 },
-];
-
-const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) => {
-  const confirmedCount = appointments.filter(a => a.status === AppointmentStatus.CONFIRMED).length;
-  const pendingCount = appointments.filter(a => a.status === AppointmentStatus.SCHEDULED).length;
-  const doctorsCount = MOCK_DOCTORS.length;
+const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments, doctorsCount }) => {
+  const dateKey = (date: Date) => [
+    date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+  const today = new Date();
+  const todayKey = dateKey(today);
+  const confirmedCount = appointments.filter(a => a.date === todayKey && a.status === AppointmentStatus.CONFIRMED).length;
+  const pendingCount = appointments.filter(a => a.date === todayKey && a.status === AppointmentStatus.SCHEDULED).length;
+  const completedCount = appointments.filter(a => a.status === AppointmentStatus.FINISHED).length;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const data = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((name, index) => {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + index);
+    return { name, total: appointments.filter(a => a.date === dateKey(day) && a.status === AppointmentStatus.FINISHED).length };
+  });
 
   return (
     <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500 pb-10">
@@ -53,7 +57,7 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
           icon={<Users className="text-blue-600" size={24} />}
           label="Total de Pacientes"
           value={patientsCount.toString()}
-          trend="+12% este mês"
+          trend="Cadastros da clínica"
           bgColor="bg-blue-50"
         />
         <StatCard 
@@ -73,8 +77,8 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
         <StatCard 
           icon={<Activity className="text-purple-600" size={24} />}
           label="Total Atendimentos"
-          value="452"
-          trend="+5% vs mês passado"
+          value={completedCount.toString()}
+          trend="Atendimentos finalizados"
           bgColor="bg-purple-50"
         />
       </div>
@@ -115,27 +119,13 @@ const Dashboard: React.FC<DashboardProps> = ({ patientsCount, appointments }) =>
             Alertas Críticos
           </h3>
           <div className="space-y-6">
-            <AlertItem 
-              icon={<ShieldCheck size={20} className="text-blue-600" />}
-              title="Backup Concluído"
-              desc="Sincronização com nuvem realizada com sucesso."
-              time="Há 2 horas"
-              bgColor="bg-blue-50"
-            />
-            <AlertItem 
+            {pendingCount > 0 ? <AlertItem
               icon={<AlertCircle size={20} className="text-amber-600" />}
-              title="Exame Pendente"
-              desc="João Silva: Resultados prontos para revisão."
-              time="Há 4 horas"
+              title="Agendamentos pendentes"
+              desc={`${pendingCount} agendamento(s) aguardando confirmação para hoje.`}
+              time="Hoje"
               bgColor="bg-amber-50"
-            />
-            <AlertItem 
-              icon={<TrendingUp size={20} className="text-emerald-600" />}
-              title="Faturamento"
-              desc="Relatório mensal pronto para análise."
-              time="Há 1 dia"
-              bgColor="bg-emerald-50"
-            />
+            /> : <p className="text-sm text-slate-500">Nenhum agendamento pendente para hoje.</p>}
           </div>
           <button
             type="button"

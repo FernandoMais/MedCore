@@ -1,10 +1,13 @@
 /// <reference types="vite/client" />
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { isApprovedFreshTarget } from './freshStart';
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
 
-export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+export const isSupabaseConfigured = Boolean(
+  SUPABASE_URL && SUPABASE_ANON_KEY && isApprovedFreshTarget(SUPABASE_URL)
+);
 
 if (!isSupabaseConfigured) {
   console.warn(
