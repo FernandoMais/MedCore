@@ -21,12 +21,17 @@ o destino com a origem configurada, exige um destino vazio e consulta por padrã
 Somente `--apply-bootstrap` aplica o SQL protegido. Não é um importador de dados.
 Os oito testes Node dos utilitários de bootstrap e hashes passaram.
 
-## Bloqueio: acesso à origem
+## Bloqueio: origem pausada e API indisponível
 
 A conexão atual identifica a origem como `fddyuaotpplsnocgvhby`.
 O token autorizado permite administrar o destino, mas a origem respondeu
 HTTP 403 na consulta de inventário, na consulta de metadados do projeto e
 no endpoint dedicado de SQL somente leitura.
+
+O usuário confirmou posteriormente que consegue abrir esse projeto no painel
+e que ele está **pausado**. O retorno 403, sozinho, não comprova que a conta
+não tem acesso: é necessário conferir o estado e as opções de recuperação
+no painel, além das permissões do token, antes de determinar a causa.
 
 Por isso, **não foi possível conferir as tabelas, contagens, contas Auth ou
 arquivos da origem**. Não se pode concluir que ela está vazia, que foi excluída
@@ -34,6 +39,8 @@ ou que não há dados remotos. É necessário acesso autorizado à origem ou um
 backup/exportação preparado por quem administra esse projeto.
 
 Não foram alterados registros, permissões ou configurações da origem.
+O projeto antigo não foi reativado. Reativá-lo pode reconectar aplicativos,
+sincronizações e rotinas existentes; a recuperação precisa ser controlada.
 
 ## Ainda não concluído
 

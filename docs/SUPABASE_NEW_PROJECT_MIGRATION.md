@@ -33,6 +33,27 @@ Não escolha uma clínica arbitrária nem exclua registros para fazer o SQL pass
 
 ## 2. Escolher a forma de cópia
 
+### Se a origem estiver pausada
+
+Confira as opções exibidas no painel do projeto antigo antes de executar
+qualquer ação. A documentação atual do Supabase permite retomar projetos
+dentro da janela de restauração; fora dela, pode ser necessário baixar os
+backups disponíveis do banco e dos objetos Storage.
+
+- Não exclua o projeto antigo: excluir também pode remover os backups.
+- Se houver download de backups, guarde os arquivos de forma privada. Essa
+  cópia não inclui alterações ainda locais nos navegadores.
+- Não retome a origem sem avaliar sincronizações, agendadores, webhooks e
+  demais operações externas. Aplicativos ainda ligados a ela podem reconectar.
+- O destino já preparado com a estrutura protegida **não deve receber um dump
+  completo do schema antigo por cima**. Primeiro revise o inventário e prepare
+  a importação somente de dados descrita na opção B.
+
+Veja [pausa e retomada](https://supabase.com/docs/guides/platform/free-project-pausing)
+e [recuperação após a janela de retomada](https://supabase.com/docs/guides/troubleshooting/restore-project-after-90-days-pause).
+O caminho da segunda página conserva um nome antigo; siga as informações
+atuais do conteúdo e do painel, não deduza o prazo pelo endereço.
+
 ### Opção A: restauração do Supabase para um novo projeto
 
 Se estiver disponível na sua conta, o Supabase oferece:

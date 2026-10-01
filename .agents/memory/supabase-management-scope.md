@@ -16,3 +16,14 @@ or Auth transfer. If denied, request authorized source access or an export from
 its administrator; do not weaken RLS or substitute anonymous access/offline
 passwords for an authorized migration. Keep the application connection unchanged
 until source and browser-local backups have been reconciled and verified.
+
+Do not attribute source HTTP 403 exclusively to missing ownership. Check the
+source project state and available recovery actions in the dashboard too.
+
+**Why:** The source was visible to the user but paused. Denied Management API
+requests alone did not establish the cause or prove that the source was empty.
+
+**How to apply:** For a paused source, consult current Supabase recovery guidance
+and distinguish resume from backup-download recovery. Do not resume blindly:
+existing clients, jobs and webhooks may reconnect. Recovery-document URLs can
+retain obsolete time limits in their slugs; use current page contents.
