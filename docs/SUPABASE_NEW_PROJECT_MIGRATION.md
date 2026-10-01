@@ -1,8 +1,9 @@
 # Novo projeto Supabase preservando os dados
 
-Este roteiro prepara uma transferência; ele **não comprova uma transferência
-executada**. Não houve acesso autorizado ao banco antigo/novo nesta preparação.
-Não altere a conexão do aplicativo antes das conferências abaixo.
+Este roteiro descreve a transferência; ele **não comprova uma transferência
+de dados executada**. O progresso autorizado está registrado em
+`docs/SUPABASE_MIGRATION_STATUS.md`. Não altere a conexão do aplicativo antes
+das conferências abaixo.
 
 ## 1. Preparar a origem e impedir perda de dados
 
