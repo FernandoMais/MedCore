@@ -576,7 +576,7 @@ const App: React.FC = () => {
               ) : (
                 <CloudOff size={14} className="text-slate-400" />
               )}
-              <span className={`text-[10px] font-black uppercase tracking-[0.2em] hidden xs:inline-block ${cloudStatus === 'connected' ? 'text-emerald-700' : 'text-slate-400'}`}>
+              <span className={`text-[10px] font-black uppercase tracking-[0.2em] hidden sm:inline-block ${cloudStatus === 'connected' ? 'text-emerald-700' : 'text-slate-400'}`}>
                 {isSyncing ? 'Salvando...' : cloudStatus === 'connected' ? 'Cloud Online' : 'Cloud Offline'}
               </span>
             </div>

@@ -3,3 +3,4 @@
 - [Supabase administrative access](supabase-management-scope.md) — source and destination management permissions are independent; a successful new-project setup does not authorize source export.
 - [Supabase backup handling](supabase-backup-handling.md) — inspect metadata and counts only; raw dump excerpts can expose credentials or patient records.
 - [Clean installation decision](fresh-installation-decision.md) — owner chose a fresh start instead of importing old records; keep old sources protected and do not silently restore them.
+- [Browser verification environment](browser-verification-environment.md) — use managed Chromium and await cloud readiness; installed Playwright and a rendered dashboard do not guarantee readiness.

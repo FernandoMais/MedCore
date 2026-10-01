@@ -18,11 +18,21 @@ O utilitário `scripts/setup-fresh-admin.mjs --check` confirmou esse estado.
 `--apply-admin` exige conexão nova, credenciais fornecidas por Secrets e
 destino ainda vazio; cria somente o primeiro administrador e confere login/RLS.
 
-**Ainda aguardando:** URL/chave pública do destino e credenciais escolhidas
-para o primeiro administrador pelo formulário seguro. A conexão antiga é
-recusada no modo de instalação limpa; nenhuma conta foi criada até aqui.
+**Concluído:** conexão do aplicativo substituída pelo formulário seguro e
+primeiro administrador criado no Auth com perfil vinculado à clínica nova.
+Login, vínculo de clínica e bloqueio da leitura de senhas foram conferidos
+no Supabase real. O teste de navegador autenticado confirmou o painel com
+Cloud Online, uma conta de equipe e todas as coleções clínicas/financeiras
+vazias, sem chamadas ao projeto antigo. Só as configurações iniciais da clínica
+foram persistidas; nenhum registro antigo ou de demonstração foi importado.
+O armazenamento antigo foi preservado no teste isolado.
+
 Ativação remota do portal e serviços de e-mail continuam com suas próprias
 etapas de configuração/validação. Não importar o backup sem nova autorização.
+
+Os testes unitários passaram e a construção de produção foi conferida.
+O operador de criação inicial não deve ser repetido em uma clínica já iniciada:
+sua proteção exige destino vazio antes de criar a conta.
 
 ## Concluído: estrutura do destino
 
