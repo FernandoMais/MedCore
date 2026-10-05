@@ -27,11 +27,16 @@ try {
     query: `select count(*) as owners from public.users where "clinicId"='${clinic}' and role='admin' and "authUserId" is not null;`,
   });
   if (Number(bound?.[0]?.owners) !== 1) throw new Error('Revise o vínculo do administrador antes de ativar o serviço.');
+  const config = await request('/config/auth');
+  const trustedOrigins = new Set([origin]);
+  if (config.site_url) {
+    const site = new URL(config.site_url);
+    if (site.protocol === 'https:' && !site.username && !site.password) trustedOrigins.add(site.origin);
+  }
   await request('/secrets', 'POST', [
     { name: 'PATIENT_CLINIC_ID', value: clinic },
-    { name: 'PATIENT_APP_ORIGINS', value: origin },
+    { name: 'PATIENT_APP_ORIGINS', value: [...trustedOrigins].join(',') },
   ]);
-  const config = await request('/config/auth');
   const redirects = new Set((config.uri_allow_list || '').split(',').filter(Boolean));
   redirects.add(`${origin}/**`);
   await request('/config/auth', 'PATCH', { uri_allow_list: [...redirects].join(',') });

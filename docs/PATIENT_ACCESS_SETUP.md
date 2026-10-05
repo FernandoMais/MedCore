@@ -116,6 +116,9 @@ independentemente.
 ## Supabase Auth, confirmação e recuperação
 
 - Habilite Auth por e-mail/senha, confirmação de e-mail e SMTP de produção.
+  O provedor padrão gratuito rejeita alterações em templates sem SMTP próprio.
+  Para a equipe, o link padrão de recuperação é aceito pela tela existente; o
+  portal do paciente continua exigindo o template com token hash descrito abaixo.
   Cadastro normal cria atomicamente uma nova identidade com `admin.createUser`,
   nonce em `app_metadata` e `email_confirm=false`; se o e-mail já existir, a
   criação falha sem alterar essa identidade. Só depois de persistir o paciente
@@ -146,6 +149,10 @@ independentemente.
   Mantenha armazenamento Auth isolado para não substituir a sessão da equipe.
 - Cadastre as origens e URLs de confirmação/recuperação em Site URL / Redirect
   URLs do Supabase Auth, além de incluí-las em `PATIENT_APP_ORIGINS`.
+  O Site URL deve ser o endereço publicado confirmado, nunca localhost ou o
+  endereço temporário de desenvolvimento. O script
+  `scripts/configure-auth-links.mjs <URL-publicada>` configura esses destinos
+  sem tentar personalizar templates quando não existe SMTP próprio.
 - O cadastro público cria um Auth novo com a senha escolhida pelo paciente;
   nunca reutiliza uma identidade não confirmada encontrada por e-mail e nunca
   exclui uma conta preexistente. Uma resposta de conflito é neutra e orienta

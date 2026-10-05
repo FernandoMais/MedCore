@@ -5,3 +5,4 @@
 - [Clean installation decision](fresh-installation-decision.md) — owner chose a fresh start instead of importing old records; keep old sources protected and do not silently restore them.
 - [Browser verification environment](browser-verification-environment.md) — use managed Chromium and await cloud readiness; installed Playwright and a rendered dashboard do not guarantee readiness.
 - [Public patient registration](public-patient-registration.md) — signup is identity/access only, never payment; saved registration and confirmation-mail delivery have separate outcomes.
+- [Auth email provider constraints](auth-email-provider.md) — default Supabase mail rejects template edits; fix published redirects separately and preserve isolated patient recovery.
