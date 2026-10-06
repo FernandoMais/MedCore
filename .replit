@@ -52,3 +52,7 @@ timeoutMs = 180000
 VITE_CLINIC_ID = "303470b1-753c-4130-98ad-0d5c1613fb97"
 VITE_FRESH_START = "true"
 VITE_FRESH_TARGET_REF = "zktvrcaeztmzmsdjcjsa"
+SMTP_FROM_EMAIL = "airi@restauraintegral.com.br"
+SMTP_HOST = "smtp.titan.email"
+SMTP_PORT = "465"
+SMTP_SENDER_NAME = "Restaura Integral"
