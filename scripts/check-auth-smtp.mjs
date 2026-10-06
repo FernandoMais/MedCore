@@ -1,0 +1,78 @@
+import tls from 'node:tls';
+import { smtpSettings } from './configure-auth-smtp.mjs';
+
+// One optional test message, always to the configured sender itself. No Auth
+// account is created and no real user's password or recovery token is changed.
+const settings = smtpSettings(process.env);
+const socket = tls.connect({
+  host: settings.smtp_host, port: Number(settings.smtp_port),
+  servername: settings.smtp_host, rejectUnauthorized: true,
+});
+socket.setTimeout(20000);
+let buffer = '';
+const replies = [];
+let waiter = null;
+let failure = null;
+function fail() {
+  failure = new Error('Não foi possível completar a conexão SMTP criptografada.');
+  if (waiter) { waiter.reject(failure); waiter = null; }
+  socket.destroy();
+}
+socket.on('error', fail);
+socket.on('timeout', fail);
+socket.on('close', () => {
+  if (waiter) fail();
+});
+socket.on('data', chunk => {
+  buffer += chunk.toString('utf8');
+  let end;
+  while ((end = buffer.indexOf('\r\n')) >= 0) {
+    const line = buffer.slice(0, end);
+    buffer = buffer.slice(end + 2);
+    // Do not store response text, which may include identities or challenges.
+    if (/^\d{3} /.test(line)) {
+      const code = Number(line.slice(0, 3));
+      if (waiter) { waiter.resolve(code); waiter = null; }
+      else replies.push(code);
+    }
+  }
+});
+async function expect(expected, command) {
+  if (failure) throw failure;
+  if (command) socket.write(`${command}\r\n`);
+  const code = replies.length ? replies.shift()
+    : await new Promise((resolve, reject) => { waiter = { resolve, reject }; });
+  if (!expected.includes(code)) throw new Error(`O servidor SMTP recusou a etapa (código ${code}).`);
+}
+try {
+  await expect([220]);
+  await expect([250], 'EHLO medcorepro');
+  await expect([334], 'AUTH LOGIN');
+  await expect([334], Buffer.from(settings.smtp_user).toString('base64'));
+  await expect([235], Buffer.from(settings.smtp_pass).toString('base64'));
+  let testMessageAccepted = false;
+  if (process.argv.includes('--send-test')) {
+    await expect([250], `MAIL FROM:<${settings.smtp_admin_email}>`);
+    await expect([250, 251], `RCPT TO:<${settings.smtp_admin_email}>`);
+    await expect([354], 'DATA');
+    const content = [
+      `From: <${settings.smtp_admin_email}>`, `To: <${settings.smtp_admin_email}>`,
+      'Subject: Teste de envio - Restaura Integral',
+      `Date: ${new Date().toUTCString()}`, 'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=utf-8', '',
+      'Teste de conexao SMTP para envio de convites do sistema.',
+      'Esta mensagem nao altera contas ou senhas e nao requer nenhuma acao.',
+      '.', '',
+    ].join('\r\n');
+    socket.write(content);
+    await expect([250]);
+    testMessageAccepted = true;
+  }
+  await expect([221], 'QUIT');
+  console.log(JSON.stringify({ smtpAuthenticated: true, testMessageAccepted }));
+} catch (error) {
+  console.error(error.constructor === Error ? error.message : 'O teste SMTP não foi concluído.');
+  process.exitCode = 1;
+} finally {
+  socket.destroy();
+}

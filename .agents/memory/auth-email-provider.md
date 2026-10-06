@@ -1,6 +1,6 @@
 ---
 name: Auth email provider constraints
-description: Default Supabase mail can recover staff passwords, but rejects template edits; use the confirmed published URL.
+description: Supabase mail transport, delivery validation, template constraints and trusted published redirects.
 ---
 
 Do not combine URL-setting fixes with email-template customization when the
@@ -27,3 +27,16 @@ back to Supabase's default localhost Site URL even though the app was published.
 patient callback separation, and do not overwrite the published origin during
 later function deployments. Old consumed/expired links require a fresh request,
 not a longer expiry or weaker verification.
+
+Do not treat a successfully saved custom SMTP configuration as proof that
+invitation emails can be sent.
+
+**Why:** Supabase accepted and persisted SMTP settings and enabled custom
+templates, while the mail server separately rejected SMTP authentication. The
+Management API validates configuration, not mailbox credentials or the mailbox's
+external-application permissions.
+
+**How to apply:** Verify transport authentication before claiming delivery works,
+and distinguish server acceptance from inbox delivery. For HostGator Titan, check
+external-app access and two-factor compatibility before repeatedly requesting
+passwords; do not weaken an administrative mailbox's security just to enable SMTP.
