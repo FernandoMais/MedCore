@@ -13,6 +13,7 @@ let buffer = '';
 const replies = [];
 let waiter = null;
 let failure = null;
+let rejectionHint = 'não especificado';
 function fail() {
   failure = new Error('Não foi possível completar a conexão SMTP criptografada.');
   if (waiter) { waiter.reject(failure); waiter = null; }
@@ -32,6 +33,17 @@ socket.on('data', chunk => {
     // Do not store response text, which may include identities or challenges.
     if (/^\d{3} /.test(line)) {
       const code = Number(line.slice(0, 3));
+      if (code >= 400) {
+        if (/third.?party|external.*(?:disabled|not allowed|not enabled)/i.test(line)) {
+          rejectionHint = 'acesso externo não permitido';
+        } else if (/locked|suspended/i.test(line)) {
+          rejectionHint = 'conta bloqueada';
+        } else if (/too many|rate limit/i.test(line)) {
+          rejectionHint = 'limite de tentativas';
+        } else if (/authentication failed|invalid credentials|password.*not accepted/i.test(line)) {
+          rejectionHint = 'credenciais não aceitas';
+        }
+      }
       if (waiter) { waiter.resolve(code); waiter = null; }
       else replies.push(code);
     }
@@ -42,14 +54,21 @@ async function expect(expected, command) {
   if (command) socket.write(`${command}\r\n`);
   const code = replies.length ? replies.shift()
     : await new Promise((resolve, reject) => { waiter = { resolve, reject }; });
-  if (!expected.includes(code)) throw new Error(`O servidor SMTP recusou a etapa (código ${code}).`);
+  if (!expected.includes(code)) {
+    throw new Error(`O servidor SMTP recusou a etapa (código ${code}; motivo: ${rejectionHint}).`);
+  }
 }
 try {
   await expect([220]);
   await expect([250], 'EHLO medcorepro');
-  await expect([334], 'AUTH LOGIN');
-  await expect([334], Buffer.from(settings.smtp_user).toString('base64'));
-  await expect([235], Buffer.from(settings.smtp_pass).toString('base64'));
+  if (process.argv.includes('--plain')) {
+    const credentials = Buffer.from(`\0${settings.smtp_user}\0${settings.smtp_pass}`).toString('base64');
+    await expect([235], `AUTH PLAIN ${credentials}`);
+  } else {
+    await expect([334], 'AUTH LOGIN');
+    await expect([334], Buffer.from(settings.smtp_user).toString('base64'));
+    await expect([235], Buffer.from(settings.smtp_pass).toString('base64'));
+  }
   let testMessageAccepted = false;
   if (process.argv.includes('--send-test')) {
     await expect([250], `MAIL FROM:<${settings.smtp_admin_email}>`);
