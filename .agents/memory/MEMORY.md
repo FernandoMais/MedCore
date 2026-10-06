@@ -5,5 +5,6 @@
 - [Clean installation decision](fresh-installation-decision.md) — owner chose a fresh start instead of importing old records; keep old sources protected and do not silently restore them.
 - [Browser verification environment](browser-verification-environment.md) — use managed Chromium and await cloud readiness; installed Playwright and a rendered dashboard do not guarantee readiness.
 - [Public patient registration](public-patient-registration.md) — signup is identity/access only, never payment; saved registration and confirmation-mail delivery have separate outcomes.
-- [Auth email provider constraints](auth-email-provider.md) — default Supabase mail rejects template edits; fix published redirects separately and preserve isolated patient recovery.
+- [Auth email provider constraints](auth-email-provider.md) — validate native sends, safe template URLs, cache reloads and quotas; keep patient recovery isolated.
 - [Access invitations](access-invitations.md) — the clinic chose email invitations so patients and staff define their own passwords.
+- [Supabase Management API quirks](supabase-management-quirks.md) — valid issued JWTs can differ; check migrated log queries for body errors, not HTTP status alone.

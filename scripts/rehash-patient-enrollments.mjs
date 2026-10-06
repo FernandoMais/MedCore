@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
@@ -21,6 +21,14 @@ export function validateProjects(url, sourceRef, targetRef) {
 export function enrollmentHash(key, clinicId, patientId, nonce) {
   return createHmac('sha256', key)
     .update(`patient-enrollment:${clinicId}:${patientId}:${nonce}`)
+    .digest('hex');
+}
+
+// The 256-bit nonce is server-generated and stored in protected app_metadata.
+// Its commitment must not change when a valid API JWT is reissued or rotated.
+export function stableEnrollmentHash(clinicId, patientId, nonce) {
+  return createHash('sha256')
+    .update(`patient-enrollment:v2:${clinicId}:${patientId}:${nonce}`)
     .digest('hex');
 }
 

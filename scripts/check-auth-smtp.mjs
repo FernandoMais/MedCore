@@ -1,14 +1,16 @@
 import tls from 'node:tls';
+import net from 'node:net';
 import { smtpSettings } from './configure-auth-smtp.mjs';
 
 // One optional test message, always to the configured sender itself. No Auth
 // account is created and no real user's password or recovery token is changed.
 const settings = smtpSettings(process.env);
-const socket = tls.connect({
-  host: settings.smtp_host, port: Number(settings.smtp_port),
-  servername: settings.smtp_host, rejectUnauthorized: true,
-});
-socket.setTimeout(20000);
+let socket = settings.smtp_port === '587'
+  ? net.connect({ host: settings.smtp_host, port: 587 })
+  : tls.connect({
+      host: settings.smtp_host, port: 465,
+      servername: settings.smtp_host, rejectUnauthorized: true,
+    });
 let buffer = '';
 const replies = [];
 let waiter = null;
@@ -19,12 +21,7 @@ function fail() {
   if (waiter) { waiter.reject(failure); waiter = null; }
   socket.destroy();
 }
-socket.on('error', fail);
-socket.on('timeout', fail);
-socket.on('close', () => {
-  if (waiter) fail();
-});
-socket.on('data', chunk => {
+function receive(chunk) {
   buffer += chunk.toString('utf8');
   let end;
   while ((end = buffer.indexOf('\r\n')) >= 0) {
@@ -48,7 +45,15 @@ socket.on('data', chunk => {
       else replies.push(code);
     }
   }
-});
+}
+function bindSocket() {
+  socket.setTimeout(20000);
+  socket.on('error', fail);
+  socket.on('timeout', fail);
+  socket.on('close', () => { if (waiter) fail(); });
+  socket.on('data', receive);
+}
+bindSocket();
 async function expect(expected, command) {
   if (failure) throw failure;
   if (command) socket.write(`${command}\r\n`);
@@ -61,6 +66,20 @@ async function expect(expected, command) {
 try {
   await expect([220]);
   await expect([250], 'EHLO medcorepro');
+  if (settings.smtp_port === '587') {
+    await expect([220], 'STARTTLS');
+    const plain = socket;
+    plain.removeAllListeners('data');
+    plain.removeAllListeners('error');
+    plain.removeAllListeners('timeout');
+    plain.removeAllListeners('close');
+    socket = tls.connect({
+      socket: plain, servername: settings.smtp_host, rejectUnauthorized: true,
+    });
+    bindSocket();
+    // Authentication happens only after a successful, verified TLS upgrade.
+    await expect([250], 'EHLO medcorepro');
+  }
   if (process.argv.includes('--plain')) {
     const credentials = Buffer.from(`\0${settings.smtp_user}\0${settings.smtp_pass}`).toString('base64');
     await expect([235], `AUTH PLAIN ${credentials}`);

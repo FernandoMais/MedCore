@@ -289,10 +289,19 @@ async function enrollmentNonceHash(
   patient: PatientRow,
   nonce: string,
 ): Promise<string> {
-  return await hmacHex(
-    settings.serviceRoleKey,
-    `patient-enrollment:${settings.clinicId}:${patient.id}:${nonce}`,
+  return await stableEnrollmentNonceHash(settings.clinicId, patient.id, nonce);
+}
+
+export async function stableEnrollmentNonceHash(
+  clinicId: string,
+  patientId: string,
+  nonce: string,
+): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`patient-enrollment:v2:${clinicId}:${patientId}:${nonce}`),
   );
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function findPendingEnrollment(
@@ -329,10 +338,44 @@ async function verifyPendingEnrollment(
     error ||
     !authUser ||
     authUser.email?.toLowerCase() !== patient.email.toLowerCase() ||
-    typeof nonce !== "string" ||
-    await enrollmentNonceHash(settings, patient, nonce) !== enrollment.nonce_hash
+    typeof nonce !== "string" || !/^[a-f0-9]{64}$/.test(nonce)
   ) return null;
+  const stableHash = await enrollmentNonceHash(settings, patient, nonce);
+  if (stableHash !== enrollment.nonce_hash) {
+    // Backward compatibility only with an actually verified legacy commitment.
+    // Never auto-rebind an account or repair an unverified legacy hash here.
+    const legacyHash = await hmacHex(
+      settings.serviceRoleKey,
+      `patient-enrollment:${settings.clinicId}:${patient.id}:${nonce}`,
+    );
+    if (legacyHash !== enrollment.nonce_hash) return null;
+  }
   return { nonce, authUserId: authUser.id };
+}
+
+class RecoveryMailError extends Error {
+  constructor(public readonly mailStatus: number) {
+    super("Patient recovery email was not accepted.");
+  }
+}
+
+export function recoveryDeliveryFailure(status: number): Response {
+  return status === 429
+    ? json({ error: "Limite temporário de envio atingido. Aguarde antes de solicitar outro link." }, 429)
+    : json({ error: "O provedor não aceitou o envio do e-mail. Tente novamente mais tarde ou avise a clínica." }, 502);
+}
+
+async function sendRecoveryEmail(
+  anon: SupabaseClient,
+  email: string,
+  redirectTo: string,
+): Promise<void> {
+  const { error } = await anon.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) {
+    // Controlled diagnostics only: never log email, CPF, tokens or SMTP responses.
+    console.warn(JSON.stringify({ event: "patient_recovery_delivery_failed", status: error.status }));
+    throw new RecoveryMailError(error.status);
+  }
 }
 
 async function persistPendingEnrollment(
@@ -400,8 +443,8 @@ async function sendPendingEnrollmentRecovery(
 ): Promise<boolean> {
   const { data, error } = await service.auth.admin.getUserById(authUserId);
   if (error || data.user?.email?.toLowerCase() !== email.toLowerCase()) return false;
-  const result = await anon.auth.resetPasswordForEmail(email, { redirectTo });
-  return !result.error;
+  await sendRecoveryEmail(anon, email, redirectTo);
+  return true;
 }
 
 function createTemporaryPassword(): string {
@@ -750,7 +793,7 @@ async function recover(
       const patient = await findPatientByCpf(service, settings.clinicId, cpf);
       if (patient && isEmail(patient.email)) {
         if (patient.authUserId) {
-          await anon.auth.resetPasswordForEmail(patient.email, { redirectTo });
+          await sendRecoveryEmail(anon, patient.email, redirectTo);
         } else {
           const enrollment = await findPendingEnrollment(service, patient);
           if (enrollment) {
@@ -823,10 +866,8 @@ async function adminReset(
     return json({ error: "Tente novamente mais tarde." }, 429);
   }
 
-  const redirectOptions = { redirectTo };
   if (patient.authUserId) {
-    const result = await anon.auth.resetPasswordForEmail(patient.email, redirectOptions);
-    if (result.error) return json({ error: "Não foi possível enviar a solicitação." }, 502);
+    await sendRecoveryEmail(anon, patient.email, redirectTo);
     return json({ sent: true });
   }
 
@@ -839,7 +880,7 @@ async function adminReset(
       existingEnrollment,
     );
     if (!ownership) {
-      return json({ error: "Não foi possível enviar a solicitação." }, 502);
+      return json({ error: "Não foi possível validar o convite existente. A clínica precisa revisar o vínculo de acesso; não crie outro cadastro." }, 409);
     }
     if (
       !patient.portalEnrollmentPending &&
@@ -894,16 +935,13 @@ async function adminReset(
       throw new Error("Could not update patient enrollment status.");
     }
 
-    const { error: recoveryError } = await anon.auth.resetPasswordForEmail(
-      patient.email,
-      redirectOptions,
-    );
-    if (recoveryError) throw new Error("Could not send patient recovery invitation.");
+    await sendRecoveryEmail(anon, patient.email, redirectTo);
     return json({ sent: true });
-  } catch {
+  } catch (error) {
     // Once the private marker is persisted, retain this recoverable pending
     // enrollment even if email delivery fails; retries can safely resend.
     if (pendingPersisted) {
+      if (error instanceof RecoveryMailError) return recoveryDeliveryFailure(error.mailStatus);
       return json({ error: "Não foi possível enviar a solicitação." }, 502);
     }
     if (createdAuthUserId) {
@@ -973,8 +1011,10 @@ async function handleRequest(request: Request): Promise<Response> {
       default:
         response = json({ error: "Unsupported action." }, 400);
     }
-  } catch {
-    response = json({ error: "Request could not be completed." }, 500);
+  } catch (error) {
+    response = body.action === "admin-reset" && error instanceof RecoveryMailError
+      ? recoveryDeliveryFailure(error.mailStatus)
+      : json({ error: "Request could not be completed." }, 500);
   }
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(cors)) headers.set(key, value);

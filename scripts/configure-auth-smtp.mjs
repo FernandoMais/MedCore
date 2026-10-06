@@ -3,8 +3,8 @@ import { validateFreshConfiguration } from './setup-fresh-admin.mjs';
 
 export function smtpSettings(env) {
   const email = (env.SMTP_FROM_EMAIL || '').trim();
-  if (env.SMTP_HOST !== 'smtp.titan.email' || env.SMTP_PORT !== '465') {
-    throw new Error('Use o servidor Titan aprovado com TLS na porta 465.');
+  if (env.SMTP_HOST !== 'smtp.titan.email' || !['465', '587'].includes(env.SMTP_PORT)) {
+    throw new Error('Use o servidor Titan aprovado com TLS na porta 465 ou STARTTLS na porta 587.');
   }
   if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(email)) {
     throw new Error('Configure um endereço de remetente válido.');
@@ -15,6 +15,8 @@ export function smtpSettings(env) {
   return {
     external_email_enabled: true,
     mailer_autoconfirm: false,
+    rate_limit_email_sent: 30,
+    smtp_max_frequency: 60,
     smtp_admin_email: email,
     smtp_host: env.SMTP_HOST,
     // The current Management API schema requires a string, not a JSON number.
@@ -52,9 +54,12 @@ async function main() {
   if (String(saved.smtp_port) !== settings.smtp_port || saved.mailer_autoconfirm !== false) {
     throw new Error('Revise a porta SMTP e a confirmação obrigatória de e-mail.');
   }
+  if (saved.rate_limit_email_sent !== 30 || saved.smtp_max_frequency !== 60) {
+    throw new Error('Revise os limites de envio de e-mail.');
+  }
   // Do not output the API response: it can contain SMTP credentials.
   console.log(JSON.stringify({
-    smtpConfigured: true, encryptedPort: 465, emailConfirmationRequired: true,
+    smtpConfigured: true, encryptedPort: Number(settings.smtp_port), emailConfirmationRequired: true,
   }));
 }
 

@@ -40,3 +40,36 @@ external-application permissions.
 and distinguish server acceptance from inbox delivery. For HostGator Titan, check
 external-app access and two-factor compatibility before repeatedly requesting
 passwords; do not weaken an administrative mailbox's security just to enable SMTP.
+
+Verify a native Supabase recovery send as well as direct SMTP authentication.
+Build an email's complete destination URL in one Go-template expression rather
+than interpolating a token after conditional URL fragments.
+
+**Why:** Direct SMTP authentication and signup sends worked while native recovery
+returned 500 before reaching SMTP. Go's HTML-template contextual escaping rejected
+the token in an ambiguous URL context. This was a rendering failure, not a bad
+mailbox password.
+
+**How to apply:** Exercise the templates with Go's actual HTML renderer, including
+patient/staff callbacks and missing/default redirects. Inspect sanitized Auth
+errors before changing provider credentials. Keep token-hash verification and
+separate patient recovery; do not replace them with arbitrary session fragments.
+
+Allow for native Auth template caching after updating a template.
+
+**Why:** The saved configuration and public template endpoint showed the corrected
+body while Auth still executed the previous cached body. The upstream Auth source
+defaults to a ten-minute template lifetime; accepted sends followed after reload.
+
+**How to apply:** Compare the template/error positions against the current body,
+allow a cache reload, and verify a native send before claiming completion.
+Configuration persistence alone does not prove the mailer is using the new body.
+
+Check inherited native mail quotas when enabling custom SMTP.
+
+**Why:** The default-provider hourly limit remained in place after custom SMTP was
+configured, causing native recovery to return 429.
+
+**How to apply:** Set an appropriate controlled hourly quota, retain per-recipient
+cooldowns, and distinguish throttling from rendering/transport failures. Public
+recovery must not reveal whether a CPF has an account.

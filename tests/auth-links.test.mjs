@@ -25,8 +25,10 @@ test('SMTP projects can apply direct-token templates but default-provider projec
 test('recovery and invitation send token hashes to the requested isolated flow, with staff fallback', () => {
   for (const type of ['recovery', 'invite']) {
     const template = recoveryTemplate(type);
-    assert.ok(template.includes('{{ .RedirectTo }}'));
-    assert.ok(template.includes('{{ .TokenHash }}'));
+    assert.ok(template.includes('$callback = .RedirectTo'));
+    assert.ok(template.includes('$callback .TokenHash'));
+    assert.ok(template.includes(`href="{{ printf "%s&token_hash=%s&type=${type}"`));
+    assert.ok(!template.includes('href="{{ if'));
     assert.ok(template.includes(`type=${type}`));
     assert.ok(template.includes('staff-auth=recovery'));
     assert.ok(!template.includes('.ConfirmationURL'));

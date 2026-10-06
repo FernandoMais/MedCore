@@ -3,9 +3,12 @@ import { validateFreshConfiguration } from './setup-fresh-admin.mjs';
 
 export function recoveryTemplate(type = 'recovery') {
   if (!['recovery', 'invite'].includes(type)) throw new Error('Tipo de link inválido.');
-  return `<h2>Defina sua senha no MedCorePro</h2>
+  // Build the whole URL before putting it in href. html/template rejects a
+  // token interpolation after branches with different URL/query contexts.
+  return `{{ $callback := printf "%s/?staff-auth=recovery" .SiteURL }}{{ if and .RedirectTo (ne .RedirectTo .SiteURL) }}{{ $callback = .RedirectTo }}{{ end }}
+<h2>Defina sua senha no MedCorePro</h2>
 <p>Clique abaixo para abrir o aplicativo e escolher sua senha. O link é de uso único.</p>
-<p><a href="{{ if and .RedirectTo (ne .RedirectTo .SiteURL) }}{{ .RedirectTo }}&amp;{{ else }}{{ .SiteURL }}/?staff-auth=recovery&amp;{{ end }}token_hash={{ .TokenHash }}&amp;type=${type}">Definir nova senha</a></p>
+<p><a href="{{ printf "%s&token_hash=%s&type=${type}" $callback .TokenHash }}">Definir nova senha</a></p>
 <p>Se você não fez esta solicitação, ignore este e-mail.</p>`;
 }
 
