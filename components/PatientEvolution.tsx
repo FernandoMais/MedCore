@@ -38,6 +38,8 @@ const PatientEvolution: React.FC<PatientEvolutionProps> = ({ patientId, currentU
 
   const fetchEvolutions = async () => {
     setLoading(true);
+    setError(null);
+    setEvolutions([]);
     try {
       const { data, error } = await supabase
         .from('evolucao_paciente')
@@ -48,7 +50,6 @@ const PatientEvolution: React.FC<PatientEvolutionProps> = ({ patientId, currentU
       if (error) throw error;
       setEvolutions(data || []);
     } catch (err: any) {
-      console.error('Erro ao buscar evoluções:', err);
       setError('Não foi possível carregar o histórico de evoluções.');
     } finally {
       setLoading(false);
@@ -57,7 +58,7 @@ const PatientEvolution: React.FC<PatientEvolutionProps> = ({ patientId, currentU
 
   useEffect(() => {
     fetchEvolutions();
-  }, [patientId]);
+  }, [patientId, currentUser.id]);
 
   const isSensitive = (specialty: string) => {
     const s = specialty.toLowerCase();
@@ -65,6 +66,8 @@ const PatientEvolution: React.FC<PatientEvolutionProps> = ({ patientId, currentU
   };
 
   const canViewDirectly = (entry: EvolutionEntry) => {
+    // Private rows are filtered by server RLS, not a shared browser password.
+    if (entry.medico_id === currentUser.id || entry.medico_id === currentUser.doctorId) return true;
     if (currentUser.role === UserRole.ADMIN) return true;
     if (!isSensitive(entry.especialidade)) return true;
     if (unlockedIds.has(entry.id)) return true;

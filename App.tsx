@@ -65,7 +65,8 @@ const App: React.FC = () => {
   const [financeSection, setFinanceSection] = useState<FinanceSection>('dashboard');
   const [activeAppointmentId, setActiveAppointmentId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline'>('offline');
+  const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline' | 'pending'>('offline');
+  const [cloudReady, setCloudReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [showSelfRegister, setShowSelfRegister] = useState(false);
@@ -96,8 +97,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     storage.save(db);
+    if (currentUser && cloudReady) setCloudStatus('pending');
     const cloudSync = async () => {
-      if (currentUser) {
+      if (currentUser && cloudReady) {
         setIsSyncing(true);
         try {
           await storage.syncToCloud(db, currentUser.clinicId);
@@ -111,18 +113,25 @@ const App: React.FC = () => {
     };
     const timer = setTimeout(cloudSync, 3000);
     return () => clearTimeout(timer);
-  }, [db, currentUser]);
+  }, [db, currentUser, cloudReady]);
 
-  const handleLogin = (user: User) => {
+  const handleLogin = async (user: User) => {
+    setIsLoading(true);
+    setCloudReady(false);
+    storage.resetCloudSyncState();
     setCurrentUser(user);
     // Só busca dados financeiros depois que o login vinculou a sessão ao
     // tenant. Antes disso, o fetch é deliberadamente um no-op.
-    storage.fetchFromCloud(user.clinicId).then(cloudData => {
-      if (cloudData && Object.keys(cloudData).length > 0) {
-        setDb(prev => ({ ...prev, ...cloudData }));
-        setCloudStatus('connected');
-      }
-    });
+    try {
+      const cloudData = await storage.fetchFromCloud(user.clinicId);
+      setDb(prev => ({ ...prev, ...cloudData }));
+      setCloudReady(true);
+      setCloudStatus('connected');
+    } catch {
+      setCloudStatus('offline');
+    } finally {
+      setIsLoading(false);
+    }
     setCurrentView('dashboard');
     setActiveAppointmentId(null);
     setShowLanding(false);
@@ -131,6 +140,9 @@ const App: React.FC = () => {
   const handleLogout = () => {
     import('./services/auth').then(m => m.logoutUser()).catch(() => {});
     setCurrentUser(null);
+    setCloudReady(false);
+    storage.resetCloudSyncState();
+    setDb(prev => ({ ...prev, sigilousNotes: [], evolutions: [] }));
     setCurrentView('dashboard');
     setActiveAppointmentId(null);
     setShowLanding(true);
@@ -244,6 +256,17 @@ const App: React.FC = () => {
     return <Login users={db.users || []} onLogin={handleLogin} />;
   }
 
+  if (!cloudReady) {
+    return <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+      <div className="max-w-lg bg-white rounded-3xl p-8 space-y-5">
+        <h1 className="text-xl font-black">Não foi possível carregar os dados da clínica</h1>
+        <p>Para evitar gravar uma cópia antiga sobre o prontuário, a edição está suspensa até uma leitura confirmada do Supabase.</p>
+        <button className="bg-blue-600 text-white rounded-xl px-5 py-3 font-bold" onClick={() => handleLogin(currentUser)}>Tentar conexão novamente</button>
+        <button className="block text-slate-600 font-bold" onClick={handleLogout}>Voltar ao acesso</button>
+      </div>
+    </div>;
+  }
+
   const seesAllRecords = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.COLLABORATOR;
 
   const filteredPatients = (db.patients || []).filter(p =>
@@ -293,94 +316,17 @@ const App: React.FC = () => {
     senha_acesso?: string;
   }) => {
     if (activeAppointmentId && evolutionData && currentUser) {
-      setIsLoading(true);
-      try {
-        console.log("Iniciando processo de finalização de consulta no App.tsx...");
-        const appointment = db.appointments.find(a => a.id === activeAppointmentId);
-        if (appointment) {
-          console.log("Atendimento encontrado:", appointment.id, "Paciente:", appointment.patientId);
-          
-          // 1. Salvar no Supabase (Cloud)
-          const evolutionPayload = {
-            paciente_id: appointment.patientId,
-            medico_id: currentUser.doctorId || currentUser.id,
-            medico_nome: currentUser.name,
-            especialidade: evolutionData.especialidade || (db.doctors.find(d => d.id === currentUser.doctorId)?.specialty || 'Clínica Geral'),
-            anotacoes: `QUEIXA/EVOLUÇÃO: ${evolutionData.complaint}\n` +
-                       (evolutionData.diagnosis ? `DIAGNÓSTICO (CID): ${evolutionData.diagnosis}\n` : '') +
-                       (evolutionData.conduct ? `CONDUTA/PROCEDIMENTOS: ${evolutionData.conduct}\n` : '') +
-                       (evolutionData.prescription ? `RECEITUÁRIO:\n${evolutionData.prescription}\n` : ''),
-            senha_acesso: evolutionData.senha_acesso || '',
-            data_criacao: new Date().toISOString()
-          };
-
-          console.log("Enviando evolução para o Supabase...");
-          const { error } = await storage.saveEvolutionToCloud(evolutionPayload);
-
-          if (error) {
-            console.error("Erro ao salvar evolução no Supabase:", error);
-            // Notificamos mas continuamos para salvar localmente
-          } else {
-            console.log("Evolução salva com sucesso no Supabase.");
-          }
-
-          // 2. Manter compatibilidade com histórico legado (Local)
-          const dateStr = new Date().toLocaleDateString('pt-BR');
-          const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          
-          const newEntry = `[DATA: ${dateStr} às ${timeStr}]\n` +
-                           `MÉDICO: ${currentUser.name}\n` +
-                           `QUEIXA/EVOLUÇÃO: ${evolutionData.complaint}\n` +
-                           (evolutionData.diagnosis ? `DIAGNÓSTICO (CID): ${evolutionData.diagnosis}\n` : '') +
-                           (evolutionData.conduct ? `CONDUTA/PROCEDIMENTOS: ${evolutionData.conduct}\n` : '') +
-                           (evolutionData.prescription ? `RECEITUÁRIO:\n${evolutionData.prescription}\n` : '') +
-                           `--------------------------------------------------\n\n`;
-          
-          console.log("Atualizando estado local do banco de dados...");
-          setDb(prev => {
-            const updatedPatients = (prev.patients || []).map(p => 
-              p.id === appointment.patientId 
-                ? { ...p, history: (p.history || '') + newEntry } 
-                : p
-            );
-            
-            const updatedAppointments = (prev.appointments || []).map(a => 
-              a.id === activeAppointmentId 
-                ? { ...a, status: AppointmentStatus.FINISHED } 
-                : a
-            );
-            const updatedFinancial = ensureFinancialEntriesForAppointment(
-              prev.financial,
-              appointment,
-              currentUser.clinicId,
-            );
-
-            return {
-              ...prev,
-              patients: updatedPatients,
-              appointments: updatedAppointments,
-              financial: updatedFinancial,
-            };
-          });
-
-          console.log("Consulta finalizada com sucesso!");
-          alert("Atendimento finalizado e gravado com sucesso!");
-          
-          // Reset view after success
-          setActiveAppointmentId(null);
-          setCurrentView('agenda');
-        } else {
-          console.warn("Atendimento não encontrado para o ID:", activeAppointmentId);
-          alert("Erro: Atendimento não localizado.");
-        }
-      } catch (err) {
-        console.error("Erro crítico ao finalizar consulta:", err);
-        alert("Erro ao salvar atendimento. Verifique sua conexão e tente novamente.");
-      } finally {
-        setIsLoading(false);
-      }
+      const saved = await storage.finishConsultation(activeAppointmentId, evolutionData, currentUser.clinicId);
+      setDb(prev => ({
+        ...prev,
+        appointments: prev.appointments.map(a => a.id === saved.appointment.id ? saved.appointment : a),
+        evolutions: [saved.evolution, ...(prev.evolutions || []).filter(e => e.id !== saved.evolution.id)],
+        financial: ensureFinancialEntriesForAppointment(prev.financial, saved.appointment, currentUser.clinicId),
+      }));
+      alert("Atendimento e evolução confirmados no Supabase. A sincronização financeira é verificada separadamente.");
+      setActiveAppointmentId(null);
+      setCurrentView('agenda');
     } else {
-      console.log("Finalização sem dados ou usuário (cancelamento/saída).");
       setActiveAppointmentId(null);
       setCurrentView('agenda');
     }
@@ -549,6 +495,9 @@ const App: React.FC = () => {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden w-full">
+        {cloudStatus !== 'connected' && <div role="status" className="bg-amber-50 border-b border-amber-200 p-3 text-sm text-amber-900">
+          A sincronização não foi confirmada. Alterações de cadastro, agenda ou financeiro podem estar pendentes neste computador; não as considere salvas na nuvem.
+        </div>}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shrink-0 z-30 no-print">
           <div className="flex items-center space-x-4 flex-1">
             <button 
@@ -577,7 +526,7 @@ const App: React.FC = () => {
                 <CloudOff size={14} className="text-slate-400" />
               )}
               <span className={`text-[10px] font-black uppercase tracking-[0.2em] hidden sm:inline-block ${cloudStatus === 'connected' ? 'text-emerald-700' : 'text-slate-400'}`}>
-                {isSyncing ? 'Salvando...' : cloudStatus === 'connected' ? 'Cloud Online' : 'Cloud Offline'}
+                {isSyncing ? 'Salvando...' : cloudStatus === 'connected' ? 'Cloud Online' : cloudStatus === 'pending' ? 'Verificando pendências' : 'Gravação não confirmada'}
               </span>
             </div>
             <button className="relative p-2 text-slate-400 hover:text-blue-600 transition-colors">
@@ -681,6 +630,7 @@ const App: React.FC = () => {
           )}
           {currentView === 'consultation' && activeAppointmentId && (
             <ConsultationRoom 
+              key={activeAppointmentId}
               appointmentId={activeAppointmentId} 
               appointments={db.appointments || []}
               patients={db.patients || []}
@@ -694,12 +644,12 @@ const App: React.FC = () => {
                 const nextMedications = typeof newM === 'function' ? newM(medicationsList) : newM;
                 return { ...prev, medications: nextMedications };
               })}
-              onAddSigilousNote={(note: SigilousNote) => {
+              onAddSigilousNote={async (note: SigilousNote) => {
+                await storage.saveSigilousNoteToCloud(note);
                 setDb(prev => ({
                   ...prev,
                   sigilousNotes: [note, ...(prev.sigilousNotes || [])]
                 }));
-                storage.saveSigilousNoteToCloud(note).catch(() => {});
               }}
               onFinish={handleFinishConsultation}
             />

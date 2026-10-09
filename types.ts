@@ -147,6 +147,7 @@ export interface Medication {
 
 export interface EvolutionEntry {
   id: string;
+  appointment_id?: string;
   paciente_id: string;
   medico_id: string;
   medico_nome: string;

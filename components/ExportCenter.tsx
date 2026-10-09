@@ -26,7 +26,7 @@ const ExportCenter: React.FC<ExportCenterProps> = ({ onExport, onImport }) => {
     <div className="max-w-4xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col items-start gap-2">
         <h1 className="text-3xl font-black text-slate-800 tracking-tight">Centro de Exportação & Backup</h1>
-        <p className="text-slate-500">Garanta a segurança dos seus dados clínicos e exporte prontuários completos.</p>
+        <p className="text-slate-500">Exporte uma cópia local dos dados disponíveis neste computador.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -35,8 +35,8 @@ const ExportCenter: React.FC<ExportCenterProps> = ({ onExport, onImport }) => {
           <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
             <Database size={28} />
           </div>
-          <h3 className="text-xl font-black text-slate-800 mb-2">Backup Completo (JSON)</h3>
-          <p className="text-sm text-slate-500 mb-8">Exporta toda a base de dados (pacientes, médicos, agendamentos e prontuários) em um único arquivo de segurança.</p>
+          <h3 className="text-xl font-black text-slate-800 mb-2">Cópia Local (JSON)</h3>
+          <p className="text-sm text-slate-500 mb-8">Não substitui o backup do Supabase: dados de outras sessões, contas de acesso e notas restritas podem não estar incluídos. A restauração completa da clínica ainda precisa ser validada.</p>
           <div className="flex flex-col gap-3">
             <button 
               onClick={onExport}

@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { Patient, Gender, Doctor, MedicalFile, User as AppUser, SigilousNote, UserRole } from '../types';
 import RestrictedHistory from './RestrictedHistory';
+import PatientEvolution from './PatientEvolution';
+import { supabase } from '../services/supabase';
 import { requestAdminPatientReset } from '../services/patientAuth';
 
 interface PatientManagerProps {
@@ -220,20 +222,16 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
     }
   };
 
-  // Senha sigilosa = a senha definida pelo admin para o MÉDICO atual (User.senhaAcesso)
-  const doctorSigilousPassword = currentUser.senhaAcesso || '';
-
-  const handleUnlockSigilous = (e: React.FormEvent) => {
+  const handleUnlockSigilous = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!doctorSigilousPassword) {
-      setSigilousError('Nenhuma senha sigilosa foi configurada para seu perfil. Solicite ao administrador.');
-      return;
-    }
-    if (sigilousInput !== doctorSigilousPassword) {
-      setSigilousError('Senha sigilosa incorreta.');
+    const { data, error } = await supabase.auth.getUser();
+    if (error || data.user?.id !== currentUser.authUserId
+      || ![UserRole.ADMIN, UserRole.DOCTOR].includes(currentUser.role)) {
+      setSigilousError('Acesso restrito a uma sessão autenticada de médico ou administrador. As permissões são verificadas no servidor.');
       return;
     }
     setSigilousUnlocked(true);
+    setShowSigilous(true);
     setSigilousError('');
     setShowSigilousInput(false);
   };
@@ -572,6 +570,10 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
               )}
             </div>
 
+            <div className="bg-white rounded-3xl border border-slate-200 p-6">
+              <PatientEvolution key={selectedPatient.id} patientId={selectedPatient.id} currentUser={currentUser} />
+            </div>
+
             {/* Área Sigilosa */}
             <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
@@ -598,7 +600,7 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
               {!sigilousUnlocked && showSigilousInput && (
                 <form onSubmit={handleUnlockSigilous} className="space-y-3 p-5 bg-amber-50 border border-amber-200 rounded-2xl animate-in fade-in duration-200">
                   <p className="text-xs font-bold text-amber-700 leading-relaxed">
-                    Insira sua senha sigilosa (definida pelo administrador para seu perfil) para visualizar as anotações confidenciais.
+                    Confirme sua sessão autenticada. Apenas o autor e o administrador da mesma clínica podem ler estas notas; uma senha compartilhada não concede acesso.
                   </p>
                   {sigilousError && (
                     <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 p-3 rounded-xl">{sigilousError}</p>
@@ -608,12 +610,13 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
                       type="password"
                       value={sigilousInput}
                       onChange={e => setSigilousInput(e.target.value)}
-                      placeholder="Senha sigilosa"
+                      placeholder="Acesso pela sessão autenticada"
+                      disabled
                       className="flex-1 px-4 py-3 bg-white border border-amber-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-amber-500/10 transition-all"
                       autoFocus
                     />
                     <button type="submit" className="px-5 py-3 bg-amber-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all">
-                      Desbloquear
+                      Confirmar acesso
                     </button>
                   </div>
                 </form>

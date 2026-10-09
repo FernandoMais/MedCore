@@ -14,3 +14,17 @@ mtime_ms = 1791511113123
 storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:b8561a96-f8b0-49b0-9254-83c32df5ca6b/5eea1eda-b60b-45fa-8f5f-1c10514fb660/75be7e89-5df3-4c00-a632-59d7becefbdf"
 storage_version_token = "1791511137999122"
 content_type = "text/html"
+
+[[outputs]]
+id = "w_aaT7bwQ_BoQLSNgnFbH"
+uri = "file://docs/plano-operacional-seguranca.html"
+type = "html"
+title = "Plano operacional e de segurança do ambulatório"
+description = "Correções aplicadas, testes comprovados e pendências que precisam ser resolvidas antes do uso clínico."
+logical_id = "c8fc6bff-0a8a-4408-a18a-0e7f689b8ef1"
+content_hash = "sha256:0256dfd63570dcd1ab96fab281bae71b7703efcd50ef9761c77fd91c91328282"
+size = 8147
+mtime_ms = 1791513849847
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:b8561a96-f8b0-49b0-9254-83c32df5ca6b/c8fc6bff-0a8a-4408-a18a-0e7f689b8ef1/da30eb24-32b5-45e0-8511-1a23bcfa1231"
+storage_version_token = "1791514099282528"
+content_type = "text/html"

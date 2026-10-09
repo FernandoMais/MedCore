@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plano operacional e de segurança — MedCorePro</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f1f5f9;color:#172033;font:16px/1.6 system-ui,sans-serif}
+main{max-width:1050px;margin:32px auto;background:white;padding:42px;border-radius:20px}
+h1{line-height:1.2}h2{margin-top:30px;font-size:22px}.notice{background:#fff7ed;border-left:5px solid #ea580c;padding:20px}
+.ok{background:#effaf3;border-left:5px solid #16a34a;padding:18px}table{border-collapse:collapse;width:100%;margin:20px 0}
+td,th{text-align:left;vertical-align:top;padding:15px;border-bottom:1px solid #e2e8f0}th{background:#f8fafc}
+small,.muted{color:#64748b}li{margin:10px 0}@media(max-width:650px){main{margin:0;padding:22px}table{font-size:14px}td,th{padding:10px}}
+@media print{body{background:white}main{margin:0;max-width:none;padding:12px}h2{break-after:avoid}tr{break-inside:avoid}}
+</style></head><body><main>
+<p class="muted">MedCorePro • Atualização de 08/10/2026</p>
+<h1>O que falta para operar com segurança no ambulatório</h1>
+<div class="notice"><strong>Conclusão: ainda não liberar para uso clínico como única fonte do prontuário.</strong>
+As correções abaixo reduzem riscos concretos, mas não substituem homologação completa, restauração comprovada, controle de concorrência e revisão dos fluxos da equipe.</div>
+<h2>Correções concluídas</h2>
+<table><thead><tr><th>Rotina</th><th>Proteção aplicada</th><th>Onde está disponível</th></tr></thead><tbody>
+<tr><td>Finalização do atendimento</td><td>Evolução e encerramento em uma transação. Falhas desfazem a operação; repetição do mesmo pedido não duplica a evolução. Autoria, paciente e clínica vêm do vínculo autenticado e do agendamento.</td><td>Banco aplicado; tela corrigida no ambiente de desenvolvimento.</td></tr>
+<tr><td>Rascunho clínico</td><td>Não há mensagem de sucesso nem exclusão do rascunho sem confirmação do banco. Falha mantém a tela e o texto para nova tentativa. Rascunhos novos são separados por clínica, usuário e atendimento.</td><td>Código pronto para publicar.</td></tr>
+<tr><td>Sigilo</td><td>Notas restritas e evoluções sensíveis são filtradas pelo servidor: autor ou administrador da mesma clínica. Uma senha compartilhada não autoriza leitura. Classificação de novos registros sensíveis também usa o vínculo do profissional, sem confiar apenas na especialidade enviada pelo navegador.</td><td>Banco aplicado; interface atualizada no desenvolvimento.</td></tr>
+<tr><td>Atendimento finalizado</td><td>Cópias antigas não podem reabrir ou mudar paciente, médico, data, horário e tipo de um atendimento já finalizado pela agenda. Isso não substitui uma futura rotina auditada de correções clínicas.</td><td>Proteção aplicada no banco.</td></tr>
+<tr><td>Sincronização</td><td>A edição só começa após leitura autenticada da nuvem. Coleções vazias são respeitadas; erros deixam de ser ignorados. Linhas inalteradas não são reenviadas em massa; histórico geral, notas e evoluções não são sobrescritos pelo snapshot do navegador. O status informa quando há pendências.</td><td>Código pronto para publicar. Conflitos na mesma linha e exclusões ainda exigem solução completa.</td></tr>
+<tr><td>Download local</td><td>Corrigido o ciclo de criação e liberação do arquivo; senhas da equipe excluídas. A tela e o arquivo identificam uma cópia local, não um backup integral restaurável do Supabase.</td><td>Download verificado no navegador. Restauração integral não aprovada.</td></tr>
+</tbody></table>
+<h2>Evidências e limites dos testes</h2>
+<div class="ok"><strong>40 testes de código e 10 testes de navegador aprovados; checagem de tipos e compilação aprovadas.</strong>
+No Supabase real, dados fictícios verificaram finalização concorrente sem duplicação, rejeição de contas não autorizadas, rollback após falha na segunda gravação, sigilo por profissional e clínica, bloqueio de autoria forjada e de alteração destrutiva. Todos os registros e contas desses testes foram removidos.</div>
+<p>A interface clínica foi testada com dados fictícios e falhas simuladas. A captura visual conferiu a página pública, não uma sessão autenticada da equipe. Não foi concluído um atendimento real completo, nem certificada cada rotina, relatório, arquivo ou cálculo financeiro.</p>
+<p><strong>Recuperação de senha:</strong> configuração e modelos corrigidos continuam ativos. A revisão anterior verificou cadastro, definição de senha e login com CPF em conta temporária; os pedidos administrativo e público de recuperação foram aceitos pelo serviço. A chegada ao e-mail pessoal não foi comprovada. Não foram consumidos links nem alteradas senhas de pacientes reais nesta atualização.</p>
+<p><strong>GitHub e publicação:</strong> a revisão anterior comprovou leitura do repositório e existência de código local ainda não enviado. Nenhum push foi realizado. As alterações de tela desta atualização não foram publicadas automaticamente. O site usado pelos pacientes precisa receber a nova versão.</p>
+<h2>Pendências para liberação e respectivas soluções</h2>
+<table><thead><tr><th>Prioridade</th><th>O que concluir</th><th>Como comprovar</th></tr></thead><tbody>
+<tr><td>Bloqueante</td><td>Alterações simultâneas e exclusões em cadastros, agenda e financeiro.</td><td>Usar versões por registro, detectar conflito antes da escrita e APIs específicas de exclusão. Testar dois computadores, falhas de rede e reabertura da sessão sem apagar alterações pendentes. Uma edição antiga não pode trocar o paciente durante o atendimento.</td></tr>
+<tr><td>Bloqueante</td><td>Acesso completo da equipe.</td><td>Convites por e-mail, senha definida pelo próprio profissional, papéis impostos pelo servidor e desativação de acesso. A tela não pode informar criação/troca de senha quando apenas um campo local mudou. Testar administrador, médico e colaborador.</td></tr>
+<tr><td>Bloqueante</td><td>Backup integral e restauração.</td><td>Incluir registros clínicos, vínculos, anexos e financeiro com o escopo autorizado. Restaurar em ambiente separado, comparar contagens e conferir prontuários e arquivos. Definir retenção e rotina de recuperação de desastre.</td></tr>
+<tr><td>Bloqueante</td><td>Sigilo de dados históricos e computadores compartilhados.</td><td>Revisar possíveis cópias antigas de conteúdo restrito no histórico geral, sem apagar textos automaticamente. Definir proteção e retenção dos caches, rascunhos, downloads e anexos; sair do sistema não pode deixar prontuários acessíveis ao próximo usuário.</td></tr>
+<tr><td>Antes de usar o financeiro</td><td>Integridade das cobranças e repasses.</td><td>Garantia no banco contra cobrança duplicada por atendimento, validação de valores e permissões. Conferir cancelamento, estorno, recebimento e fechamento de caixa. A transação clínica não significa que o lançamento financeiro já foi confirmado.</td></tr>
+<tr><td>Antes da liberação</td><td>Rastreabilidade e homologação operacional.</td><td>Registro inviolável de autoria, alterações e acessos, com horários e justificativas. Verificar impressão, anexos e permissões com a equipe e casos fictícios; ter procedimento para indisponibilidade e correções posteriores.</td></tr>
+<tr><td>Entrada em operação</td><td>Publicar a versão correta e iniciar de forma controlada.</td><td>Concluir os bloqueantes, publicar, repetir testes no endereço dos pacientes e iniciar piloto com dados fictícios antes de depender do sistema em atendimentos reais.</td></tr>
+</tbody></table>
+<p class="muted">Nenhum prontuário real foi apagado, nenhuma senha real foi alterada e nenhum dado antigo foi importado. As permissões do banco foram restringidas conforme explicado. Este relatório é uma avaliação técnica, não uma certificação de conformidade profissional, jurídica ou de proteção de dados.</p>
+</main></body></html>

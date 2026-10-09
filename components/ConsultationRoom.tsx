@@ -26,8 +26,10 @@ import {
   Send,
   ChevronDown
 } from 'lucide-react';
-import { Appointment, Patient, Doctor, Medication, SigilousNote, User } from '../types';
+import { Appointment, Patient, Doctor, Medication, SigilousNote, User, UserRole } from '../types';
 import { getICDRecommendation } from '../services/gemini';
+import { supabase } from '../services/supabase';
+import PatientEvolution from './PatientEvolution';
 
 interface ConsultationRoomProps {
   appointmentId: string;
@@ -39,7 +41,7 @@ interface ConsultationRoomProps {
   users: User[];
   sigilousNotes: SigilousNote[];
   setMedications: React.Dispatch<React.SetStateAction<Medication[]>>;
-  onAddSigilousNote: (note: SigilousNote) => void;
+  onAddSigilousNote: (note: SigilousNote) => Promise<void>;
   onFinish: (evolutionData?: { 
     diagnosis: string; 
     conduct: string; 
@@ -47,7 +49,7 @@ interface ConsultationRoomProps {
     prescription: string;
     especialidade?: string;
     senha_acesso?: string;
-  }) => void;
+  }) => Promise<void>;
 }
 
 const ConsultationRoom: React.FC<ConsultationRoomProps> = ({ 
@@ -76,6 +78,11 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [finishError, setFinishError] = useState('');
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const draftKey = `medcore_consult_draft_${currentUser.clinicId}_${currentUser.id}_${appointmentId}`;
+  const legacyDraftKey = `medcore_consult_draft_${appointmentId}`;
+  const finishingRef = useRef(false);
   
   const [showMedRegistration, setShowMedRegistration] = useState(false);
   const [newMedName, setNewMedName] = useState('');
@@ -116,7 +123,9 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   };
 
   useEffect(() => {
-    const draft = localStorage.getItem(`medcore_consult_draft_${appointmentId}`);
+    const draft = localStorage.getItem(draftKey) || (
+      currentUser.role === UserRole.ADMIN || currentUser.doctorId === appointment?.doctorId
+        ? localStorage.getItem(legacyDraftKey) : null);
     if (draft) {
       try {
         const data = JSON.parse(draft);
@@ -128,7 +137,8 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
         console.error("Erro ao carregar rascunho:", e);
       }
     }
-  }, [appointmentId]);
+    setDraftLoaded(true);
+  }, [draftKey]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -141,9 +151,12 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   }, []);
 
   useEffect(() => {
+    if (!draftLoaded) return;
     const draft = { complaint, conduct, diagnosis, prescription, appointmentId };
-    localStorage.setItem(`medcore_consult_draft_${appointmentId}`, JSON.stringify(draft));
-  }, [complaint, conduct, diagnosis, prescription, appointmentId]);
+    try { localStorage.setItem(draftKey, JSON.stringify(draft)); } catch {
+      setFinishError('Não foi possível guardar o rascunho neste computador. Não feche a tela antes da confirmação de gravação.');
+    }
+  }, [complaint, conduct, diagnosis, prescription, appointmentId, draftLoaded, draftKey]);
 
   const handleAiAssist = async () => {
     if (!complaint) {
@@ -207,16 +220,15 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
 
   const handleFinalize = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) e.preventDefault();
+    if (finishingRef.current) return;
     if (!complaint.trim()) {
       alert("A 'Queixa Principal / Evolução' é obrigatória para finalizar o atendimento.");
       return;
     }
-    if (isSensitiveSpecialty(specialty) && !accessPassword.trim()) {
-      alert("Informe a senha de acesso sigiloso para atendimentos de Psicologia ou Psiquiatria.");
-      return;
-    }
     if (window.confirm("Confirmar encerramento da consulta?\n\nOs dados serão arquivados no prontuário do paciente permanentemente.")) {
+      finishingRef.current = true;
       setIsFinishing(true);
+      setFinishError('');
       try {
         const protectedPassword = accessPassword.trim() ? await hashAccessPassword(accessPassword.trim()) : '';
         await onFinish({ 
@@ -227,28 +239,25 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
           especialidade: specialty,
           senha_acesso: protectedPassword
         });
-        localStorage.removeItem(`medcore_consult_draft_${appointmentId}`);
+        localStorage.removeItem(draftKey);
+        localStorage.removeItem(legacyDraftKey);
       } catch (error) {
-        console.error("Erro ao finalizar consulta:", error);
-        alert("Ocorreu um erro ao salvar os dados. Por favor, tente novamente.");
+        setFinishError(error instanceof Error ? error.message : 'O banco não confirmou a gravação. Seu rascunho foi mantido.');
       } finally {
+        finishingRef.current = false;
         setIsFinishing(false);
       }
     }
   };
 
   // ---- Sigilous notes unlock ----
-  const handleUnlockSigilous = (e: React.FormEvent) => {
+  const handleUnlockSigilous = async (e: React.FormEvent) => {
     e.preventDefault();
     setSigilousError('');
-    const userRecord = users.find(u => u.id === currentUser.id);
-    const expected = userRecord?.senhaAcesso || '';
-    if (!expected) {
-      setSigilousError('Nenhuma senha sigilosa foi configurada para o seu usuário. Solicite ao administrador.');
-      return;
-    }
-    if (sigilousPasswordInput !== expected) {
-      setSigilousError('Senha sigilosa incorreta.');
+    const { data, error } = await supabase.auth.getUser();
+    if (error || data.user?.id !== currentUser.authUserId
+      || ![UserRole.ADMIN, UserRole.DOCTOR].includes(currentUser.role)) {
+      setSigilousError('É necessário um acesso autenticado de médico ou administrador. O servidor restringe as notas ao autor e ao administrador.');
       return;
     }
     setSigilousUnlocked(true);
@@ -268,9 +277,15 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
       note: newSigilousNote.trim(),
       createdAt: new Date().toISOString()
     };
-    onAddSigilousNote(note);
-    setNewSigilousNote('');
-    setIsSavingNote(false);
+    try {
+      await onAddSigilousNote(note);
+      setNewSigilousNote('');
+      setSigilousError('');
+    } catch (error) {
+      setSigilousError(error instanceof Error ? error.message : 'A nota não foi gravada; seu texto foi mantido.');
+    } finally {
+      setIsSavingNote(false);
+    }
   };
 
   // Patient sigilous notes sorted by date desc
@@ -410,6 +425,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
           <button 
             type="button"
             onClick={() => onFinish()} 
+            disabled={isFinishing}
             className="p-2.5 lg:p-3 bg-slate-100 text-slate-600 rounded-xl lg:rounded-2xl hover:bg-slate-200 transition-all active:scale-90"
           >
             <ChevronLeft size={20} />
@@ -488,6 +504,10 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
         </div>
       </div>
 
+      <div className="bg-white rounded-3xl border border-slate-200 p-6">
+        <PatientEvolution patientId={patient.id} currentUser={currentUser} />
+      </div>
+
       {/* ========= Informações Sigilosas ========= */}
       <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden no-print">
         <div className="px-6 lg:px-10 py-6 border-b border-slate-100 flex items-center justify-between">
@@ -533,7 +553,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                       <KeyRound size={28} className="text-amber-400" />
                     </div>
                     <p className="text-slate-600 text-sm font-bold leading-relaxed">
-                      Insira a <span className="text-amber-400">senha sigilosa</span> concedida pelo administrador para acessar e registrar informações confidenciais deste paciente.
+                      O Supabase autoriza este acesso: apenas o autor e o administrador da clínica podem ler as notas sigilosas. Não use uma senha compartilhada.
                     </p>
                   </div>
 
@@ -550,7 +570,8 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                       type={sigilousPasswordVisible ? 'text' : 'password'}
                       value={sigilousPasswordInput}
                       onChange={e => setSigilousPasswordInput(e.target.value)}
-                      placeholder="Senha sigilosa"
+                      placeholder="Acesso pela sua sessão autenticada"
+                      disabled
                       className="w-full pl-12 pr-12 py-4 bg-white border border-slate-200 rounded-2xl text-slate-800 font-bold text-sm outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 placeholder:text-slate-400"
                       autoComplete="off"
                     />
@@ -567,7 +588,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                     className="w-full py-4 bg-amber-500 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-amber-400 transition-all active:scale-95 shadow-xl shadow-amber-500/20 flex items-center justify-center space-x-2"
                   >
                     <KeyRound size={16} />
-                    <span>Desbloquear Área Sigilosa</span>
+                    <span>Confirmar meu acesso autenticado</span>
                   </button>
                 </form>
               ) : (
@@ -606,6 +627,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                     )}
                   </div>
 
+                  {sigilousError && <p role="alert" className="text-sm text-red-600">{sigilousError}</p>}
                   <div className="space-y-4 pt-6 border-t border-white/10">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
                       <Plus size={12} />
@@ -616,7 +638,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                       onChange={e => setNewSigilousNote(e.target.value)}
                       rows={4}
                       className="w-full p-5 bg-white border border-slate-200 rounded-2xl text-slate-800 font-medium text-sm outline-none focus:ring-2 focus:ring-amber-500/30 resize-none placeholder:text-slate-400"
-                      placeholder="Registre informações sigilosas relevantes sobre o paciente. Estas anotações só serão visíveis por profissionais com a senha sigilosa..."
+                      placeholder="Nota restrita ao autor e ao administrador da mesma clínica."
                     />
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] text-slate-500 font-bold">Autor: {currentUser.name}</p>
@@ -694,7 +716,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
               {isSensitiveSpecialty(specialty) && (
                 <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
                   <div className="flex items-center justify-between ml-2">
-                    <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Senha de Acesso Sigiloso (Obrigatório)</label>
+                    <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Senha adicional legada (opcional)</label>
                     <ShieldAlert size={14} className="text-amber-500" />
                   </div>
                   <input 
@@ -704,7 +726,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                     className="w-full p-4 bg-amber-50 border border-amber-200 rounded-2xl font-black text-slate-700 text-sm outline-none focus:ring-4 focus:ring-amber-500/10 transition-all" 
                     placeholder="Defina uma senha para este registro" 
                   />
-                  <p className="text-[9px] text-amber-600 font-bold ml-2">Este registro será mascarado para outros profissionais sem esta senha.</p>
+                  <p className="text-[9px] text-amber-600 font-bold ml-2">Senha adicional legada e opcional. O servidor já restringe registros sensíveis ao autor e ao administrador.</p>
                 </div>
               )}
 
@@ -755,7 +777,8 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                   {isFinishing ? <RefreshCw size={20} className="animate-spin" /> : <CheckCircle size={20} />}
                   <span className="uppercase tracking-[0.2em]">{isFinishing ? 'Gravando no Prontuário...' : 'Finalizar e Gravar Atendimento'}</span>
                 </button>
-                <p className="text-[10px] text-slate-400 font-bold text-center uppercase tracking-widest">Ao finalizar, os dados serão salvos permanentemente no histórico do paciente.</p>
+                {finishError && <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-xl p-3">{finishError}</p>}
+                <p className="text-[10px] text-slate-400 font-bold text-center uppercase tracking-widest">Só há confirmação após gravação no Supabase. Evoluções restritas são autorizadas pelo servidor.</p>
               </div>
             </div>
           </div>

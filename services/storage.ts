@@ -9,11 +9,14 @@ import {
   Medication,
   SigilousNote,
   FinancialData,
+  EvolutionEntry,
 } from '../types';
 import { MOCK_PATIENTS, MOCK_DOCTORS, MOCK_APPOINTMENTS } from '../constants';
 import { supabase } from './supabase';
 import { removeLegacyPatientPassword } from './patientCredentials';
 import { emptyDatabase, freshStartEnabled, localDatabaseKey } from './freshStart';
+import { persistConsultation, ConsultationInput } from './clinicalPersistence';
+import { CloudChanges } from './cloudChanges';
 
 const DB_KEY = localDatabaseKey();
 
@@ -27,7 +30,24 @@ export interface AppDatabase {
   sigilousNotes: SigilousNote[];
   financial: FinancialData;
   lastBackup?: string;
+  evolutions?: EvolutionEntry[];
 }
+
+const cloudChanges = new CloudChanges();
+let syncQueue: Promise<unknown> = Promise.resolve();
+const cloudScope = (clinic: string, table: string) => `${clinic}:${table}`;
+const writableRows = (table: string, rows: any[], clinic: string): any[] => rows.map(row => {
+  if (table === 'patients') {
+    const { authUserId, pendingAuthUserId, portalEnrollmentPending, patientPasswordSet, history, ...fields } = removeLegacyPatientPassword(row);
+    return { ...fields, clinicId: fields.clinicId || clinic };
+  }
+  if (table === 'users') {
+    return { id: row.id, username: row.username, name: row.name, role: row.role,
+      doctor_id: row.doctorId || row.doctor_id || null, clinicId: clinic };
+  }
+  if (table === 'doctors' || table === 'appointments') return { ...row, clinicId: row.clinicId || clinic };
+  return row;
+});
 
 const CLINIC_ID = 'clinic-demo-001';
 
@@ -170,6 +190,9 @@ export const storage = {
         ...parsed,
         users: parsed.users.map(user => ({ ...user, password: '', senhaAcesso: undefined })),
         patients: parsed.patients.map(removeLegacyPatientPassword),
+        // Private note bodies must not survive into another user's session.
+        sigilousNotes: [],
+        evolutions: [],
       };
     }
     try {
@@ -227,24 +250,25 @@ export const storage = {
     const authorizedClinicId = requireClinicId(clinicId);
     try {
       const cloudData: Partial<AppDatabase> = {};
-      const assignIfNonEmpty = <K extends keyof AppDatabase>(key: K, res: any) => {
-        if (!res.error && Array.isArray(res.data) && res.data.length > 0) {
-          (cloudData as any)[key] = res.data;
-        }
+      const assignRows = <K extends keyof AppDatabase>(key: K, table: string, res: any) => {
+        if (res.error || !Array.isArray(res.data)) throw new Error(`Não foi possível carregar ${table}.`);
+        (cloudData as any)[key] = res.data;
+        cloudChanges.capture(cloudScope(authorizedClinicId, table), writableRows(table, res.data, authorizedClinicId));
       };
 
-      assignIfNonEmpty('patients', await supabase.from('patients').select('*'));
+      assignRows('patients', 'patients', await supabase.from('patients').select('*').eq('clinicId', authorizedClinicId));
       if (cloudData.patients) {
         cloudData.patients = cloudData.patients.map(patient => ({
           ...removeLegacyPatientPassword(patient),
           patientPasswordSet: Boolean(patient.authUserId),
         }));
       }
-      assignIfNonEmpty('doctors', await supabase.from('doctors').select('*'));
-      assignIfNonEmpty('appointments', await supabase.from('appointments').select('*'));
+      assignRows('doctors', 'doctors', await supabase.from('doctors').select('*').eq('clinicId', authorizedClinicId));
+      assignRows('appointments', 'appointments', await supabase.from('appointments').select('*').eq('clinicId', authorizedClinicId));
       const profiles = await supabase.from('users')
         .select('id,username,name,role,doctor_id,clinicId,authUserId');
-      if (!profiles.error && profiles.data?.length) {
+      assignRows('users', 'users', profiles);
+      if (profiles.data) {
         // Keep legacy offline credentials only on this browser. Never download
         // another staff member's password or use it as a cloud profile field.
         const localUsers = storage.initLocal().users;
@@ -255,8 +279,9 @@ export const storage = {
           senhaAcesso: localUsers.find(user => user.id === profile.id)?.senhaAcesso,
         })) as User[];
       }
-      assignIfNonEmpty('medications', await supabase.from('medications').select('*'));
-      assignIfNonEmpty('sigilousNotes', await supabase.from('sigilous_notes').select('*'));
+      assignRows('medications', 'medications', await supabase.from('medications').select('*'));
+      assignRows('sigilousNotes', 'sigilous_notes', await supabase.from('sigilous_notes').select('*'));
+      assignRows('evolutions', 'evolucao_paciente', await supabase.from('evolucao_paciente').select('*'));
       const financialTables: Record<string, keyof FinancialData> = {
         financial_transactions: 'transactions',
         financial_categories: 'categories',
@@ -273,25 +298,20 @@ export const storage = {
       const financial = freshStartEnabled
         ? emptyDatabase().financial
         : { ...DEFAULT_FINANCIAL } as FinancialData;
-      let loadedFinancialTable = false;
       for (const [table, key] of Object.entries(financialTables)) {
         const result = await supabase.from(table).select('*').eq('clinicId', authorizedClinicId);
-        if (!result.error && Array.isArray(result.data) && result.data.length > 0) {
-          (financial[key] as any) = result.data;
-          loadedFinancialTable = true;
-        }
+        if (result.error || !Array.isArray(result.data)) throw new Error('Não foi possível carregar os dados financeiros.');
+        (financial[key] as any) = result.data;
+        cloudChanges.capture(cloudScope(authorizedClinicId, table), result.data);
       }
-      if (loadedFinancialTable) {
-        cloudData.financial = financial;
-      }
+      cloudData.financial = financial;
       if (Array.isArray(cloudData.appointments)) {
         cloudData.appointments = normalizeAppointments(cloudData.appointments);
       }
 
       return cloudData;
     } catch (e) {
-      console.warn("Supabase Sync: Acesso negado ou erro de rede. Usando dados locais.");
-      return {};
+      throw new Error('Não foi possível carregar a base autorizada da nuvem. A sincronização automática está suspensa.');
     }
   },
 
@@ -299,6 +319,7 @@ export const storage = {
     try {
       localStorage.setItem(DB_KEY, JSON.stringify({
         ...db, patients: db.patients.map(removeLegacyPatientPassword),
+        sigilousNotes: [], evolutions: [],
         ...(freshStartEnabled ? {
           users: db.users.map(user => ({ ...user, password: '', senhaAcesso: undefined })),
         } : {}),
@@ -310,28 +331,43 @@ export const storage = {
 
   syncToCloud: async (db: AppDatabase, clinicId: string) => {
     const authorizedClinicId = requireClinicId(clinicId);
+    const run = async () => {
+      const writeChanged = async (table: string, rows: any[]) => {
+        const scope = cloudScope(authorizedClinicId, table);
+        const prepared = writableRows(table, rows, authorizedClinicId);
+        const changed = cloudChanges.changed(scope, prepared);
+        if (!changed.length) return;
+        const { error } = await supabase.from(table).upsert(changed);
+        if (error) throw new Error(`A gravação de ${table} não foi confirmada.`);
+        cloudChanges.acknowledged(scope, changed);
+      };
     try {
+      // Missing rows are not proof of an authorized deletion (a filtered UI
+      // can also omit them). Fail explicitly until dedicated delete APIs exist.
+      for (const [table, rows] of [
+        ['patients', db.patients], ['doctors', db.doctors],
+        ['appointments', db.appointments], ['medications', db.medications],
+      ] as [string, any[]][]) {
+        cloudChanges.assertNoUnconfirmedRemovals(cloudScope(authorizedClinicId, table), rows || []);
+      }
       if (db.patients?.length > 0) {
         const rows = db.patients.map(patient => {
           const { authUserId, pendingAuthUserId, portalEnrollmentPending, patientPasswordSet, ...row } = removeLegacyPatientPassword(patient);
           return { ...row, clinicId: row.clinicId || authorizedClinicId };
         }).filter(patient => patient.clinicId === authorizedClinicId);
-        const { error } = await supabase.from('patients').upsert(rows);
-        if (error) throw error;
+        await writeChanged('patients', rows);
       }
       if (db.doctors?.length > 0) {
         const rows = db.doctors.map(doctor => ({ ...doctor, clinicId: doctor.clinicId || authorizedClinicId }))
           .filter(doctor => doctor.clinicId === authorizedClinicId);
-        const { error } = await supabase.from('doctors').upsert(rows);
-        if (error) throw error;
+        await writeChanged('doctors', rows);
       }
       if (db.appointments?.length > 0) {
         const rows = db.appointments.map(appointment => ({
           ...appointment,
           clinicId: appointment.clinicId || db.patients.find(p => p.id === appointment.patientId)?.clinicId || authorizedClinicId,
         })).filter(appointment => appointment.clinicId === authorizedClinicId);
-        const { error } = await supabase.from('appointments').upsert(rows);
-        if (error) throw error;
+        await writeChanged('appointments', rows);
       }
       if (db.users?.length > 0) {
         const { data: auth, error: authError } = await supabase.auth.getUser();
@@ -342,12 +378,12 @@ export const storage = {
             id: user.id, username: user.username, name: user.name, role: user.role,
             doctor_id: user.doctorId || null, clinicId: authorizedClinicId,
           }));
-          const { error } = await supabase.from('users').upsert(rows);
-          if (error) throw error;
+          await writeChanged('users', rows);
         }
       }
-      if (db.medications?.length > 0) await supabase.from('medications').upsert(db.medications);
-      if (db.sigilousNotes?.length > 0) await supabase.from('sigilous_notes').upsert(db.sigilousNotes);
+      if (db.medications?.length > 0) await writeChanged('medications', db.medications);
+      // Notes and evolutions are append-only, acknowledged clinical writes.
+      // Never bulk-upsert these protected records from a browser snapshot.
       if (db.financial) {
         const financialTables: Record<keyof FinancialData, string> = {
           transactions: 'financial_transactions',
@@ -366,15 +402,27 @@ export const storage = {
           const rows = db.financial[key as keyof FinancialData];
           if (Array.isArray(rows) && rows.length > 0) {
             const scopedRows = financialRowsForClinic(rows as Array<{ clinicId: string }>, authorizedClinicId);
-            const { error } = await supabase.from(table).upsert(scopedRows);
-            if (error) throw error;
+            await writeChanged(table, scopedRows);
           }
         }
       }
     } catch (e) {
-      console.error("Erro na sincronização cloud:", e);
       throw e;
     }
+    };
+    const queued = syncQueue.then(run);
+    syncQueue = queued.catch(() => {});
+    return queued;
+  },
+
+  resetCloudSyncState: () => cloudChanges.clear(),
+
+  finishConsultation: async (appointmentId: string, input: ConsultationInput, clinicId: string) => {
+    const saved = await persistConsultation(supabase, appointmentId, input);
+    const scope = cloudScope(requireClinicId(clinicId), 'appointments');
+    // Only acknowledge if a full authenticated snapshot exists.
+    try { cloudChanges.acknowledged(scope, writableRows('appointments', [saved.appointment], clinicId)); } catch {}
+    return saved;
   },
 
   saveEvolutionToCloud: async (evolution: any) => {
@@ -382,12 +430,16 @@ export const storage = {
   },
 
   saveSigilousNoteToCloud: async (note: SigilousNote) => {
-    return await supabase.from('sigilous_notes').insert([note]);
+    const result = await supabase.from('sigilous_notes').insert([note]);
+    if (result.error) throw new Error('A nota sigilosa não foi gravada. O texto foi mantido; confira seu acesso e a conexão.');
+    return result;
   },
 
   exportBackup: (db?: AppDatabase) => {
     const source = db ? { ...db, lastBackup: new Date().toISOString() } : JSON.parse(localStorage.getItem(DB_KEY) || 'null');
     if (source?.patients) source.patients = source.patients.map(removeLegacyPatientPassword);
+    if (source?.users) source.users = source.users.map(({ password, senhaAcesso, ...user }: User) => ({ ...user, password: '' }));
+    if (source) source.backupKind = 'local-visible-snapshot';
     const data = JSON.stringify(source);
     if (!data || data === 'null') {
       alert("Nenhum dado disponível para exportar.");
@@ -397,9 +449,11 @@ export const storage = {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `medcore_full_backup_${new Date().toISOString()}.json`;
+    link.download = `medcore_local_backup_${new Date().toISOString().replaceAll(':', '-')}.json`;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   },
 
   importBackup: (file: File): Promise<void> => {
