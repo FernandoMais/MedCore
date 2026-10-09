@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Revisão de prontidão para uso ambulatorial — MedCorePro</title>
+<style>
+body{font:16px/1.6 system-ui,sans-serif;color:#172033;background:#f4f6fa;margin:0}
+main{max-width:960px;margin:32px auto;padding:32px;background:white;border-radius:12px}
+h1,h2{line-height:1.25}h2{margin-top:32px}.verdict{padding:20px;background:#fff2ee;border-left:5px solid #b63824}
+table{width:100%;border-collapse:collapse}td,th{padding:12px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}
+small,.muted{color:#536079}code{font-size:.88em;overflow-wrap:anywhere}li{margin-bottom:10px}
+@media(max-width:640px){main{margin:0;padding:20px}table{font-size:14px}}
+@media print{body{background:white}main{margin:0;padding:0}}
+</style>
+<main>
+<h1>Revisão para uso no ambulatório</h1>
+<p>MedCorePro — análise do código atual, testes automatizados, disponibilidade publicada e conexões. Não é uma certificação clínica, de segurança ou de conformidade com a LGPD.</p>
+<div class="verdict"><strong>Conclusão: não recomendado como prontuário principal de pacientes reais neste momento.</strong>
+<br>A aplicação abre e as conexões básicas funcionam, mas existem riscos de gravação incompleta, controles de sigilo insuficientes no cliente e provisionamento de equipe não confiável.</div>
+<h2>Resultados comprovados nesta revisão</h2>
+<table>
+<tr><th>Item</th><th>Resultado e limite da verificação</th></tr>
+<tr><td>Aplicação publicada</td><td>Disponível, HTTP 200, publicação estática com compilação bem-sucedida. O arquivo JavaScript publicado não é o mesmo do build local verificado nesta sessão.</td></tr>
+<tr><td>GitHub</td><td>Repositório FernandoMais/MedCore configurado e leitura funcionando. Na consulta, o ramo local tinha 16 commits exclusivos e o remoto nenhum: há código local ainda não enviado. Nenhum push foi realizado; permissão de escrita não foi comprovada.</td></tr>
+<tr><td>Supabase</td><td>Auth health e settings respondem HTTP 200. E-mail como método de autenticação habilitado. A consulta anônima de usuários da equipe foi recusada, como esperado. A função patient-access responde à recuperação pública.</td></tr>
+<tr><td>Recuperação de senha</td><td>Endpoint público ativo e modelo remoto correspondente ao modelo corrigido. Autenticação SMTP aprovada. O renderizador Go executou 8 combinações de recuperação/convite e callbacks. Novo envio real, troca de senha e login em conta temporária não puderam ser repetidos nesta sessão.</td></tr>
+<tr><td>Testes automatizados</td><td>34 testes de regras aprovados; TypeScript e build aprovados. Após atualização dos testes desatualizados, 7 testes de navegador aprovados. Os testes de navegador isolam a integração: não enviam e-mails nem comprovam gravações no banco real.</td></tr>
+</table>
+<h2>Limite da inspeção do banco ativo</h2>
+<p>A credencial administrativa de auditoria do Supabase foi recusada com HTTP 401 antes de qualquer cadastro temporário. Isso não significa que a conexão da aplicação esteja indisponível. Impediu a consulta das políticas e vínculos privados do banco e o teste completo de senha com limpeza segura da conta de teste.</p>
+<p>Os achados abaixo são confirmados no código e no esquema fornecido. As políticas efetivamente instaladas no banco publicado ainda precisam de verificação com autorização administrativa válida.</p>
+<h2>Bloqueios para liberação clínica</h2>
+<ol>
+<li><strong>Gravação do atendimento pode anunciar sucesso após falha na nuvem.</strong>
+O erro ao inserir a evolução é registrado, mas o fluxo continua e exibe atendimento gravado com sucesso. O rascunho pode ser limpo sem confirmação da gravação central.
+<br><small>Referências: App.tsx, finalização de consulta; components/ConsultationRoom.tsx.</small></li>
+<li><strong>O bloqueio de informações sigilosas está no navegador.</strong>
+As notas são carregadas antes do desbloqueio, e a senha é conferida no cliente. O esquema fornecido permite acesso amplo aos funcionários da clínica. Filtros de tela e uma senha visual não substituem autorização no servidor.
+<br><small>Referências: services/storage.ts; components/ConsultationRoom.tsx; supabase_new_project.sql.</small></li>
+<li><strong>Cadastro e manutenção de equipe não garantem acesso autenticado.</strong>
+A tela anuncia sucesso antes do provisionamento assíncrono. Esse provisionamento não entrega o vínculo Auth exigido pelo login novo; alterações locais de senha/papel não garantem alteração autorizada no servidor.
+<br><small>Referências: components/DoctorRegistry.tsx; services/auth.ts; services/freshStaffAuth.ts.</small></li>
+<li><strong>Sincronização, exclusões e alterações concorrentes precisam de proteção.</strong>
+O cache mescla resultados não vazios e sincroniza conjuntos completos; uma leitura incompleta ou um cache antigo pode sobrescrever mudanças ou recriar registros. Algumas gravações ignoram seus erros.
+<br><small>Referências: App.tsx; services/storage.ts.</small></li>
+<li><strong>Backup não comprova recuperação integral do prontuário.</strong>
+A exportação usa o estado local e não exporta explicitamente a tabela separada de evoluções. Restauração completa em outra instalação não foi comprovada.
+<br><small>Referências: services/storage.ts; evoluções em evolucao_paciente.</small></li>
+<li><strong>Financeiro ainda exige validação de integridade.</strong>
+A prevenção de duplicação considera o estado do navegador, sem garantia de unicidade por atendimento no esquema fornecido. Há caminhos de alteração de agenda que não revertem cobranças. A notificação financeira por e-mail não está implementada na tela analisada.
+<br><small>Referências: services/financialAutomation.ts; components/FinancialModule.tsx; supabase_new_project.sql.</small></li>
+</ol>
+<h2>Cobertura por rotina</h2>
+<ul>
+<li><strong>Cadastro público, navegação, validação de CPF e recuperação:</strong> testados na interface isolada; integração completa atual pendente de autorização administrativa.</li>
+<li><strong>Portal e agenda:</strong> testada a preservação do formulário após falha de agendamento. Não foram comprovadas reserva concorrente, remarcação e ausência com gravação real entre dispositivos.</li>
+<li><strong>Prontuário e informações sigilosas:</strong> bloqueios estruturais identificados; não liberados.</li>
+<li><strong>Equipe e perfis:</strong> login novo possui validação de vínculo em testes; cadastro, promoção e redefinição de terceiros precisam de correção e testes integrados.</li>
+<li><strong>Medicamentos, relatórios, impressão, arquivos e financeiro:</strong> revisão de código parcial; não certificados ponta a ponta no banco real. Erros de sincronização e backup impedem considerar essas rotinas plenamente verificadas.</li>
+<li><strong>Assistência de IA:</strong> opcional e não validada. A chave Gemini não consta como segredo configurado nesta revisão. Antes de habilitar, revisar exposição de credenciais no frontend e envio de informações clínicas a terceiros.</li>
+</ul>
+<h2>Condições mínimas antes do uso real</h2>
+<ol>
+<li>Renovar a autorização administrativa de auditoria e conferir as políticas instaladas, sem ampliar permissões por conveniência.</li>
+<li>Corrigir gravação/sincronização do prontuário e autorização de notas sigilosas; testar com perfis distintos, dois dispositivos, falhas e perda de conexão.</li>
+<li>Concluir acesso da equipe, integridade financeira e backup completo com restauração comprovada.</li>
+<li>Sincronizar o código aprovado com GitHub e publicar a versão validada, só depois de resolver os bloqueios.</li>
+</ol>
+<p class="muted">Nesta revisão foram alterados apenas testes desatualizados e documentação. Não foram modificados registros, senhas ou permissões de pacientes reais. Não foi realizada publicação.</p>
+</main>
+</html>

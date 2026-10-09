@@ -19,6 +19,13 @@ MedCore Pro is a React + Vite clinical management web app. It includes patient, 
 - Vite is configured with `host: "0.0.0.0"` and `allowedHosts: true` so the Replit preview proxy can load the app.
 - Deployment target: static site built with `npm run build`, served from `dist`.
 
+## Instalação atual: diferenças em relação às notas legadas
+
+- Na instalação nova, o login da equipe exige autenticação Supabase real e vínculo de usuário/clínica no servidor; senhas locais e contas demonstrativas não autorizam o acesso.
+- O acesso de pacientes é separado do acesso da equipe. Cadastro público coleta identidade e contato, não pagamento; recuperação usa confirmação real do token e senha de 8 a 128 caracteres.
+- As descrições abaixo de login sintético, senhas locais e campos de pagamento são históricas e não descrevem o contrato da instalação nova.
+- Não interpretar uma compilação aprovada como liberação para atendimento real. A revisão em `docs/revisao-ambulatorio.html` registra limites de verificação e riscos que precisam ser resolvidos antes de usar o sistema como prontuário principal.
+
 ## Notes
 
 - `GEMINI_API_KEY` is read by Vite and exposed to the client build for the existing Gemini service.

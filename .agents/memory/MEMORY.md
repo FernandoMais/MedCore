@@ -8,3 +8,4 @@
 - [Auth email provider constraints](auth-email-provider.md) — validate native sends, safe template URLs, cache reloads and quotas; keep patient recovery isolated.
 - [Access invitations](access-invitations.md) — the clinic chose email invitations so patients and staff define their own passwords.
 - [Supabase Management API quirks](supabase-management-quirks.md) — valid issued JWTs can differ; check migrated log queries for body errors, not HTTP status alone.
+- [Intended outpatient use](outpatient-use.md) — the system is intended for real ambulatory care; clinical persistence and confidentiality are release requirements.

@@ -59,8 +59,6 @@ async function fillRegistration(page, cpf = validCpf, password = 'Teste-seguro-1
   await page.getByPlaceholder('Ex: Centro').fill('Bairro de Teste');
   await page.getByPlaceholder('Ex: São Paulo').fill('Cidade de Teste');
   await page.getByPlaceholder('00000-000', { exact: true }).fill('12345678');
-  await page.getByPlaceholder('Ex: 150,00').fill('150,00');
-  await page.getByPlaceholder('Nome como aparece no comprovante').fill('Pagador de Teste');
   await page.locator('#patient-register-password').fill(password);
   await page.locator('#patient-register-password-confirm').fill(password);
 }
@@ -79,7 +77,7 @@ test('home navigation reaches patient signup/login/recovery, professional login 
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByRole('button', { name: 'Voltar à página inicial' }).click();
   await page.getByRole('button', { name: 'Acesso Profissional' }).click();
-  await expect(page.getByPlaceholder('Seu nome de usuário')).toBeVisible();
+  await expect(page.getByPlaceholder('Seu e-mail cadastrado')).toBeVisible();
 
   await page.goto('/?patient-auth=confirm');
   await expect(page.getByRole('heading', { name: 'Acesso do paciente' })).toBeVisible();
@@ -120,10 +118,10 @@ test('signup validates CPF and password confirmation, then preserves and submits
       neighborhood: 'Bairro de Teste',
       city: 'Cidade de Teste',
       zipCode: '12345-678',
-      paymentValue: '150,00',
-      paymentSender: 'Pagador de Teste',
     },
   });
+  expect(calls[0].patient).not.toHaveProperty('paymentValue');
+  expect(calls[0].patient).not.toHaveProperty('paymentSender');
 });
 
 test('signup keeps entered fields visible when the registration service fails', async ({ page }) => {

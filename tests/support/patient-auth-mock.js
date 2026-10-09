@@ -33,6 +33,7 @@ export { isValidCpf, isValidPatientPassword, normalizeCpf };
 export const registerPatient = async (patientData, password) => {
   state.calls.push({ function: 'registerPatient', patient: structuredClone(patientData), password });
   if (state.registerError) throw new Error(state.registerError);
+  return { confirmationEmailSent: true };
 };
 export const loginPatient = async (cpf, password) => {
   state.calls.push({ function: 'loginPatient', cpf, password });
