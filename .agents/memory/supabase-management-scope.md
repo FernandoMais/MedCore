@@ -27,3 +27,18 @@ requests alone did not establish the cause or prove that the source was empty.
 and distinguish resume from backup-download recovery. Do not resume blindly:
 existing clients, jobs and webhooks may reconnect. Recovery-document URLs can
 retain obsolete time limits in their slugs; use current page contents.
+
+Dashboard access and token access must also be checked independently. Prefer
+a scoped personal access token limited to the approved project and the specific
+permissions needed, rather than requesting an unrestricted legacy token.
+
+**Why:** Supabase now distinguishes scoped PATs from classic (Legacy) PATs.
+A scoped token can omit projects or permissions that its owner's account can
+access in the dashboard. A 403 or an omitted project therefore does not by itself
+prove that the account lacks ownership or that the project is unavailable.
+
+**How to apply:** Consult the current endpoint-to-permission table before asking
+for a replacement token. Separate account role, project scope, and resource
+permission failures. Explain that reading administrative API key secrets can
+enable data-plane writes even when the PAT's Management API permissions are
+read-only; constrain any such testing to explicitly authorized temporary data.
