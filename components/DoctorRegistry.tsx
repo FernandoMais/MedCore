@@ -31,13 +31,14 @@ interface DoctorRegistryProps {
   doctors: Doctor[];
   users: User[];
   clinicId: string;
+  providersOnly?: boolean;
   setDoctors: React.Dispatch<React.SetStateAction<Doctor[]>>;
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
 }
 
 const DAYS_OF_WEEK = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicId, setDoctors, setUsers }) => {
+const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicId, setDoctors, setUsers, providersOnly=false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -181,7 +182,7 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicI
       }
       
       setIsEditing(false);
-      alert("Perfil e credenciais atualizados!");
+      alert(providersOnly?"Alterações de agenda aguardam confirmação na sincronização do servidor.":"Perfil e credenciais atualizados!");
     }
   };
 
@@ -218,7 +219,7 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicI
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Corpo Clínico</h1>
           <p className="text-slate-500 font-medium">Gestão estratégica dos profissionais de saúde.</p>
         </div>
-        <button 
+        <button hidden={providersOnly}
           onClick={() => setShowAddModal(true)}
           className="bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 flex items-center space-x-2"
         >
@@ -228,7 +229,7 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicI
       </div>
 
       {/* ===== Painel de Gestão de Usuários do Sistema ===== */}
-      <div className="bg-white border border-slate-200 rounded-[32px] shadow-sm overflow-hidden">
+      <div hidden={providersOnly} className="bg-white border border-slate-200 rounded-[32px] shadow-sm overflow-hidden">
         <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center space-x-3">
             <Key className="text-blue-600" size={20} />

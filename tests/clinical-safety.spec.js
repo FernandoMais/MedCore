@@ -12,11 +12,14 @@ async function fixture(page, mode = 'consultation') {
   await page.route('**/services/supabase.ts*', route => route.fulfill({
     contentType: 'application/javascript',
     body: `const chain={select(){return this},eq(){return this},order:async()=>({data:[],error:null})};
-      export const supabase={from:()=>chain,auth:{getUser:async()=>({data:{user:{id:'auth-fixture'}},error:null})}};
+      export const supabase={from:()=>chain,rpc:async(name)=>({data:name.includes('vault_key')?'${'ab'.repeat(32)}':{evolutions:[],notes:[]},error:null}),auth:{getUser:async()=>({data:{user:{id:'auth-fixture'}},error:null})}};
       export const isSupabaseConfigured=true;`,
   }));
   const body = mode === 'consultation' ? `
     import ConsultationRoom from '/components/ConsultationRoom.tsx';
+    import {draftVault} from '/services/draftVault.ts';
+    await draftVault.unlock();
+    window.draftVault=draftVault;
     window.failClinical=true;window.failNote=true;window.finishCalls=0;
     createRoot(document.getElementById('root')).render(React.createElement(ConsultationRoom,{
       appointmentId:'appointment-fixture',
@@ -54,11 +57,12 @@ test('failed finalization keeps the draft and screen; successful retry clears it
   await page.getByRole('button', { name: 'Finalizar e Gravar Atendimento' }).click();
   await expect(page.getByRole('alert')).toContainText('rascunho mantido');
   const key = 'medcore_consult_draft_clinic-fixture_staff-fixture_appointment-fixture';
-  expect(JSON.parse(await page.evaluate(k => localStorage.getItem(k), key)).complaint).toBe('Evolução exclusivamente fictícia');
+  await expect.poll(()=>page.evaluate(k=>window.draftVault.read(k).then(d=>d?.complaint),key)).toBe('Evolução exclusivamente fictícia');
+  expect(await page.evaluate(()=>JSON.stringify({...localStorage}))).not.toContain('Evolução exclusivamente fictícia');
   await expect(page.getByPlaceholder('Relate atual do paciente...')).toHaveValue('Evolução exclusivamente fictícia');
   await page.evaluate(() => { window.failClinical = false; });
   await page.getByRole('button', { name: 'Finalizar e Gravar Atendimento' }).click();
-  await expect.poll(() => page.evaluate(k => localStorage.getItem(k), key)).toBeNull();
+  await expect.poll(() => page.evaluate(k => window.draftVault.read(k), key)).toBeNull();
 });
 
 test('a rejected private note retains the text instead of reporting success', async ({ page }) => {

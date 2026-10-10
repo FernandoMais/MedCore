@@ -31,7 +31,10 @@ import {
   X
 } from 'lucide-react';
 import { Patient, Appointment, Doctor, MedicalRecord, User, UserRole, AppointmentStatus, Medication, SigilousNote, FinanceSection } from './types';
-import { storage, AppDatabase } from './services/storage';
+import type { AppDatabase } from './services/storage';
+import { storage } from './services/operationalStorage';
+import { OperationalCenter } from './components/OperationalCenter';
+import { supabase } from './services/supabase';
 import { ensureFinancialEntriesForAppointment } from './services/financialAutomation';
 import Dashboard from './components/Dashboard';
 import PatientManager from './components/PatientManager';
@@ -78,6 +81,26 @@ const App: React.FC = () => {
   const [showStaffRecovery, setShowStaffRecovery] = useState(() =>
     freshStartEnabled && new URLSearchParams(window.location.search).get('staff-auth') === 'recovery');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [syncError,setSyncError]=useState('');
+  useEffect(()=>{
+    if(!currentUser&&!loggedPatient)return;
+    let lastActivity=Date.now();
+    const activity=()=>{
+      if(Date.now()-lastActivity>=10*60*1000){returnHome();return;}
+      lastActivity=Date.now();
+    };
+    ['pointerdown','keydown','touchstart'].forEach(event=>window.addEventListener(event,activity));
+    const timer=setInterval(()=>{
+      if(Date.now()-lastActivity>=10*60*1000)returnHome();
+    },1000);
+    const authority=setInterval(async()=>{
+      if(!currentUser)return;
+      const binding=await supabase.rpc('bind_current_user');
+      const profile=await supabase.from('users').select('id,role,active').eq('id',currentUser.id).maybeSingle();
+      if(binding.error||profile.error||!profile.data?.active||profile.data.role!==currentUser.role)handleLogout();
+    },30000);
+    return()=>{clearInterval(timer);clearInterval(authority);['pointerdown','keydown','touchstart'].forEach(event=>window.removeEventListener(event,activity));};
+  },[currentUser,loggedPatient]);
 
   useEffect(() => {
     // Close sidebar on mobile when view changes
@@ -96,7 +119,7 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    storage.save(db);
+    void storage.save(db).catch(()=>setSyncError('As pendências não puderam ser protegidas neste navegador. Aguarde uma gravação confirmada antes de sair.'));
     if (currentUser && cloudReady) setCloudStatus('pending');
     const cloudSync = async () => {
       if (currentUser && cloudReady) {
@@ -104,8 +127,10 @@ const App: React.FC = () => {
         try {
           await storage.syncToCloud(db, currentUser.clinicId);
           setCloudStatus('connected');
+          setSyncError('');
         } catch (err) {
           setCloudStatus('offline');
+          setSyncError(err instanceof Error?err.message:'Gravação não confirmada.');
         } finally {
           setTimeout(() => setIsSyncing(false), 1000);
         }
@@ -123,12 +148,16 @@ const App: React.FC = () => {
     // Só busca dados financeiros depois que o login vinculou a sessão ao
     // tenant. Antes disso, o fetch é deliberadamente um no-op.
     try {
+      await storage.prepareSession(user.role);
       const cloudData = await storage.fetchFromCloud(user.clinicId);
       setDb(prev => ({ ...prev, ...cloudData }));
+      const pending=await storage.getPendingChanges();
+      if(pending?.changes?.length)setSyncError('Há alterações criptografadas não confirmadas da sua sessão anterior. Revise ou recupere essas pendências antes de continuar.');
       setCloudReady(true);
       setCloudStatus('connected');
-    } catch {
+    } catch(e) {
       setCloudStatus('offline');
+      setSyncError(e instanceof Error?e.message:'Não foi possível abrir a sessão segura.');
     } finally {
       setIsLoading(false);
     }
@@ -142,7 +171,8 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setCloudReady(false);
     storage.resetCloudSyncState();
-    setDb(prev => ({ ...prev, sigilousNotes: [], evolutions: [] }));
+    setDb(storage.initLocal());
+    setSyncError('');
     setCurrentView('dashboard');
     setActiveAppointmentId(null);
     setShowLanding(true);
@@ -159,6 +189,15 @@ const App: React.FC = () => {
     setShowPatientConfirmation(false);
     setShowStaffRecovery(false);
     clearPatientCallbackUrl();
+  };
+
+  const reloadOperationalData=async()=>{
+    if(!currentUser)return;
+    const fresh=await storage.fetchFromCloud(currentUser.clinicId);
+    setDb(prev=>({...prev,...fresh}));
+    const me=fresh.users?.find(u=>u.id===currentUser.id);
+    if(me&&(me.role!==currentUser.role||(me as any).active===false))handleLogout();
+    setCloudStatus('connected');setSyncError('');
   };
 
   if (showPatientRecovery) {
@@ -261,6 +300,7 @@ const App: React.FC = () => {
       <div className="max-w-lg bg-white rounded-3xl p-8 space-y-5">
         <h1 className="text-xl font-black">Não foi possível carregar os dados da clínica</h1>
         <p>Para evitar gravar uma cópia antiga sobre o prontuário, a edição está suspensa até uma leitura confirmada do Supabase.</p>
+        {syncError&&<p role="alert">{syncError}</p>}
         <button className="bg-blue-600 text-white rounded-xl px-5 py-3 font-bold" onClick={() => handleLogin(currentUser)}>Tentar conexão novamente</button>
         <button className="block text-slate-600 font-bold" onClick={handleLogout}>Voltar ao acesso</button>
       </div>
@@ -316,14 +356,15 @@ const App: React.FC = () => {
     senha_acesso?: string;
   }) => {
     if (activeAppointmentId && evolutionData && currentUser) {
-      const saved = await storage.finishConsultation(activeAppointmentId, evolutionData, currentUser.clinicId);
+      await storage.syncToCloud(db,currentUser.clinicId);
+      const saved = await storage.finishConsultation(activeAppointmentId, evolutionData);
       setDb(prev => ({
         ...prev,
         appointments: prev.appointments.map(a => a.id === saved.appointment.id ? saved.appointment : a),
         evolutions: [saved.evolution, ...(prev.evolutions || []).filter(e => e.id !== saved.evolution.id)],
-        financial: ensureFinancialEntriesForAppointment(prev.financial, saved.appointment, currentUser.clinicId),
+        financial: {...prev.financial,transactions:saved.transactions,repasses:saved.repasses},
       }));
-      alert("Atendimento e evolução confirmados no Supabase. A sincronização financeira é verificada separadamente.");
+      alert("Atendimento, evolução e geração financeira confirmados em uma única transação no Supabase.");
       setActiveAppointmentId(null);
       setCurrentView('agenda');
     } else {
@@ -536,6 +577,18 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 bg-slate-50/50">
+          {syncError&&<div role="alert" className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <p>{syncError} Não feche esta tela enquanto houver alterações não confirmadas.</p>
+            <button className="mt-2 mr-4 underline font-semibold" onClick={()=>void storage.recoverPendingChanges().then(reloadOperationalData).catch(e=>setSyncError(e.message))}>Recuperar pendências protegidas desta conta</button>
+            <button className="mt-2 mr-4 underline" onClick={()=>{
+              if(confirm('Descartar somente as alterações locais não confirmadas desta conta? Nenhum registro do servidor será apagado.'))
+                void storage.discardPendingChanges().then(reloadOperationalData).catch(e=>setSyncError(e.message));
+            }}>Descartar pendências locais após revisão</button>
+            <button className="mt-2 underline font-semibold" onClick={()=>{
+              if(confirm('Recarregar os dados do servidor? Alterações de cadastros ainda não confirmadas nesta tela serão descartadas. O rascunho criptografado da consulta permanece.'))
+                void reloadOperationalData().catch(e=>setSyncError(e.message));
+            }}>Recarregar para comparar com os dados confirmados</button>
+          </div>}
           {currentView === 'dashboard' && <Dashboard patientsCount={filteredPatients.length} appointments={filteredAppointments} doctorsCount={(db.doctors || []).length} />}
           {currentView === 'agenda' && (
             <Agenda 
@@ -557,9 +610,10 @@ const App: React.FC = () => {
               onBackHome={returnHome}
               patients={filteredPatients} 
               setPatients={(newP) => setDb(prev => {
-                const patientsList = prev.patients || [];
+                const visible=new Set(filteredPatients.map(p=>p.id));
+                const patientsList = (prev.patients || []).filter(p=>visible.has(p.id));
                 const nextPatients = typeof newP === 'function' ? newP(patientsList) : newP;
-                return { ...prev, patients: nextPatients };
+                return { ...prev, patients: [...prev.patients.filter(p=>!visible.has(p.id)),...nextPatients] };
               })}
               doctors={db.doctors || []}
               isAdmin={currentUser.role === UserRole.ADMIN}
@@ -597,36 +651,23 @@ const App: React.FC = () => {
             />
           )}
           {currentView === 'doctors' && (
-            <DoctorRegistry 
+            <div className="space-y-8">
+            <OperationalCenter db={db} user={currentUser} onReload={reloadOperationalData} team/>
+            <DoctorRegistry providersOnly
               doctors={db.doctors || []} 
-              users={db.users || []}
+              users={[]}
               clinicId={currentUser.clinicId}
               setDoctors={(newD) => setDb(prev => {
                 const doctorsList = prev.doctors || [];
                 const nextDoctors = typeof newD === 'function' ? newD(doctorsList) : newD;
                 return { ...prev, doctors: nextDoctors };
               })}
-              setUsers={(newU) => setDb(prev => {
-                const usersList = prev.users || [];
-                const nextUsers = typeof newU === 'function' ? newU(usersList) : newU;
-                return { ...prev, users: nextUsers };
-              })}
+              setUsers={()=>{}}
             />
+            </div>
           )}
           {currentView === 'backups' && (
-            <ExportCenter 
-              onExport={() => storage.exportBackup(db)} 
-              onImport={async (file) => {
-                try {
-                  setIsLoading(true);
-                  await storage.importBackup(file);
-                  window.location.reload();
-                } catch (e: any) {
-                  alert(e.message);
-                  setIsLoading(false);
-                }
-              }}
-            />
+            <OperationalCenter db={db} user={currentUser} onReload={reloadOperationalData}/>
           )}
           {currentView === 'consultation' && activeAppointmentId && (
             <ConsultationRoom 
@@ -645,10 +686,10 @@ const App: React.FC = () => {
                 return { ...prev, medications: nextMedications };
               })}
               onAddSigilousNote={async (note: SigilousNote) => {
-                await storage.saveSigilousNoteToCloud(note);
+                const confirmed=await storage.saveSigilousNoteToCloud(note);
                 setDb(prev => ({
                   ...prev,
-                  sigilousNotes: [note, ...(prev.sigilousNotes || [])]
+                  sigilousNotes: [confirmed, ...(prev.sigilousNotes || []).filter(n=>n.id!==confirmed.id)]
                 }));
               }}
               onFinish={handleFinishConsultation}

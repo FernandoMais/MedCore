@@ -1,0 +1,10 @@
+import {readFile} from 'node:fs/promises';
+import {validateFreshConfiguration} from './setup-fresh-admin.mjs';
+const {ref}=validateFreshConfiguration(process.env);
+if(ref!=='zktvrcaeztmzmsdjcjsa'||!process.argv.includes('--deploy'))throw Error('Destino/comando não autorizado.');
+const form=new FormData();
+form.set('metadata',JSON.stringify({name:'staff-access',entrypoint_path:'index.ts',verify_jwt:false}));
+form.set('file',new Blob([await readFile('supabase/functions/staff-access/index.ts','utf8')],{type:'application/typescript'}),'index.ts');
+const r=await fetch(`https://api.supabase.com/v1/projects/${ref}/functions/deploy?slug=staff-access`,{method:'POST',headers:{Authorization:`Bearer ${process.env.SUPABASE_MIGRATION_ACCESS_TOKEN}`},body:form});
+if(!r.ok)throw Error(`Publicação da função recusada: HTTP ${r.status}`);
+console.log(JSON.stringify({staffAccessFunctionDeployed:true}));

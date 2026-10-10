@@ -30,6 +30,7 @@ import { Appointment, Patient, Doctor, Medication, SigilousNote, User, UserRole 
 import { getICDRecommendation } from '../services/gemini';
 import { supabase } from '../services/supabase';
 import PatientEvolution from './PatientEvolution';
+import { draftVault } from '../services/draftVault';
 
 interface ConsultationRoomProps {
   appointmentId: string;
@@ -83,6 +84,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   const draftKey = `medcore_consult_draft_${currentUser.clinicId}_${currentUser.id}_${appointmentId}`;
   const legacyDraftKey = `medcore_consult_draft_${appointmentId}`;
   const finishingRef = useRef(false);
+  const noteRetryId=useRef<string|null>(null);
   
   const [showMedRegistration, setShowMedRegistration] = useState(false);
   const [newMedName, setNewMedName] = useState('');
@@ -123,21 +125,29 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   };
 
   useEffect(() => {
-    const draft = localStorage.getItem(draftKey) || (
-      currentUser.role === UserRole.ADMIN || currentUser.doctorId === appointment?.doctorId
-        ? localStorage.getItem(legacyDraftKey) : null);
-    if (draft) {
+    let alive=true;
+    void (async()=>{
       try {
-        const data = JSON.parse(draft);
+        let data=await draftVault.read(draftKey);
+        const legacy=localStorage.getItem(draftKey)||(
+          currentUser.role===UserRole.ADMIN||currentUser.doctorId===appointment?.doctorId?localStorage.getItem(legacyDraftKey):null);
+        if(!data&&legacy){
+          data=JSON.parse(legacy);await draftVault.write(draftKey,data);
+          localStorage.removeItem(draftKey);localStorage.removeItem(legacyDraftKey);
+        }
+        if(!alive)return;
+        if(data){
         setComplaint(data.complaint || '');
         setConduct(data.conduct || '');
         setDiagnosis(data.diagnosis || '');
         setPrescription(data.prescription || '');
-      } catch (e) {
-        console.error("Erro ao carregar rascunho:", e);
+        }
+      } catch {
+        if(alive)setFinishError('Não foi possível abrir o rascunho protegido. Entre novamente com sua conta; não descarte as pendências.');
       }
-    }
-    setDraftLoaded(true);
+      if(alive)setDraftLoaded(true);
+    })();
+    return()=>{alive=false;};
   }, [draftKey]);
 
   useEffect(() => {
@@ -153,9 +163,9 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
   useEffect(() => {
     if (!draftLoaded) return;
     const draft = { complaint, conduct, diagnosis, prescription, appointmentId };
-    try { localStorage.setItem(draftKey, JSON.stringify(draft)); } catch {
+    void draftVault.write(draftKey,draft).catch(()=>{
       setFinishError('Não foi possível guardar o rascunho neste computador. Não feche a tela antes da confirmação de gravação.');
-    }
+    });
   }, [complaint, conduct, diagnosis, prescription, appointmentId, draftLoaded, draftKey]);
 
   const handleAiAssist = async () => {
@@ -239,7 +249,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
           especialidade: specialty,
           senha_acesso: protectedPassword
         });
-        localStorage.removeItem(draftKey);
+        await draftVault.remove(draftKey);
         localStorage.removeItem(legacyDraftKey);
       } catch (error) {
         setFinishError(error instanceof Error ? error.message : 'O banco não confirmou a gravação. Seu rascunho foi mantido.');
@@ -269,7 +279,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     if (!newSigilousNote.trim() || !patient) return;
     setIsSavingNote(true);
     const note: SigilousNote = {
-      id: createId('sig'),
+      id: noteRetryId.current||(noteRetryId.current=createId('sig')),
       patientId: patient.id,
       authorId: currentUser.id,
       authorName: currentUser.name,
@@ -279,6 +289,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     };
     try {
       await onAddSigilousNote(note);
+      noteRetryId.current=null;
       setNewSigilousNote('');
       setSigilousError('');
     } catch (error) {

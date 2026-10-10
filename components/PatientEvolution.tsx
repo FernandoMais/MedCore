@@ -41,14 +41,10 @@ const PatientEvolution: React.FC<PatientEvolutionProps> = ({ patientId, currentU
     setError(null);
     setEvolutions([]);
     try {
-      const { data, error } = await supabase
-        .from('evolucao_paciente')
-        .select('*')
-        .eq('paciente_id', patientId)
-        .order('data_criacao', { ascending: false });
+      const { data, error } = await supabase.rpc('operational_history', {p_patient_id:patientId});
 
       if (error) throw error;
-      setEvolutions(data || []);
+      setEvolutions(data?.evolutions || []);
     } catch (err: any) {
       setError('Não foi possível carregar o histórico de evoluções.');
     } finally {

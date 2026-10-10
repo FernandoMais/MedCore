@@ -18,6 +18,7 @@ if (!isSupabaseConfigured) {
 export const supabase: SupabaseClient = isSupabaseConfigured
   ? createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
       auth: {
+        persistSession: false,
         // Patient recovery tokens belong to the isolated patient Auth client.
         detectSessionInUrl: !new URLSearchParams(window.location.search).has('patient-auth'),
       },

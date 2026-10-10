@@ -20,6 +20,7 @@ const recoveryProof = callbackKind === 'recovery'
 const patientSupabase = isSupabaseConfigured
   ? createClient(import.meta.env.VITE_SUPABASE_URL.trim(), import.meta.env.VITE_SUPABASE_ANON_KEY.trim(), {
       auth: {
+        persistSession: false,
         storageKey: freshStartEnabled
           ? `medcore-patient-auth-${freshTargetRef}-${freshClinicId}`
           : 'medcore-patient-auth',
@@ -97,7 +98,7 @@ export async function loginPatient(cpf: string, password: string): Promise<Patie
     const { data: auth, error: authError } = await client.auth.getUser();
     if (authError || !auth.user) throw new Error('Sessão inválida.');
     const { data, error: patientError } = await client.from('patients')
-      .select('*').eq('authUserId', auth.user.id).single();
+      .select('id,name,birthDate,gender,cpf,email,phone,address,healthInsurance,bloodType,allergies,preExistingConditions,primaryDoctorId,clinicId,authUserId,portalEnrollmentPending').eq('authUserId', auth.user.id).single();
     if (patientError || !data) throw new Error('Não foi possível carregar o seu cadastro. Entre em contato com a clínica.');
     return removeLegacyPatientPassword({ ...data, patientPasswordSet: Boolean(data.authUserId) }) as Patient;
   } catch (error) {

@@ -842,13 +842,13 @@ async function adminReset(
 
   const { data: staff, error: staffError } = await service
     .from("users")
-    .select("id,role,clinicId,authUserId")
+    .select("id,role,active,clinicId,authUserId")
     .eq("authUserId", verified.user.id)
     .eq("clinicId", settings.clinicId)
     .maybeSingle();
   if (
     staffError ||
-    !staff ||
+    !staff || staff.active !== true ||
     !STAFF_ROLES.has(staff.role)
   ) return json({ error: "Não autorizado." }, 403);
 
