@@ -52,7 +52,7 @@ export const OperationalCenter:React.FC<{db:AppDatabase;user:User;onReload:()=>P
    <input required placeholder="Nome completo" aria-label="Nome completo" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
    <input type="email" required placeholder="E-mail de acesso" aria-label="E-mail de acesso" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/>
    <select aria-label="Perfil de acesso" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="doctor">Médico / profissional clínico</option><option value="collaborator">Colaborador</option><option value="admin">Administrador</option></select>
-   {form.role==='doctor'&&!form.profileId&&<><input required placeholder="Registro profissional" value={form.crm} onChange={e=>setForm({...form,crm:e.target.value})}/><input required placeholder="Especialidade" value={form.specialty} onChange={e=>setForm({...form,specialty:e.target.value})}/></>}
+   {form.role==='doctor'&&!db.users.find(u=>u.id===form.profileId)?.doctorId&&<><input required placeholder="Registro profissional" value={form.crm} onChange={e=>setForm({...form,crm:e.target.value})}/><input required placeholder="Especialidade" value={form.specialty} onChange={e=>setForm({...form,specialty:e.target.value})}/></>}
    <button disabled={busy} className="bg-teal-700 text-white rounded-lg p-3 md:col-span-2">Enviar convite</button>
   </form>
   <div className="bg-white border rounded-xl divide-y">{db.users.map(u=><div key={u.id} className="p-4 flex flex-wrap gap-3 items-center">
@@ -64,7 +64,7 @@ export const OperationalCenter:React.FC<{db:AppDatabase;user:User;onReload:()=>P
    <select aria-label={`Perfil de ${u.name}`} disabled={busy} value={u.role} onChange={e=>{const role=e.target.value;void run(async()=>{
     if(!confirm(`Alterar o perfil de ${u.name} para ${role}?`))return;await storage.syncToCloud(db,user.clinicId);await staff({action:'change',id:u.id,active:(u as any).active!==false,role});await onReload();setMessage('Perfil confirmado pelo servidor.');
    });}}><option value="admin">Administrador</option><option value="doctor">Clínico</option><option value="collaborator">Colaborador</option></select>
-   {(u as any).authUserId&&<button disabled={busy} className="border rounded px-3 py-2" onClick={()=>void run(async()=>{await staff({action:'recover',email:u.username});setMessage('O provedor aceitou o envio do link para a conta vinculada.');})}>Enviar recuperação</button>}
+   {(u as any).authUserId&&<button disabled={busy} className="border rounded px-3 py-2" onClick={()=>void run(async()=>{await staff({action:'recover',id:u.id});setMessage('O provedor aceitou o envio do link para o e-mail autenticado da conta vinculada.');})}>Enviar recuperação</button>}
   </div>)}</div></>:<>
   <div className="bg-white border rounded-xl p-5 space-y-3">
    <h3 className="font-semibold">Backup criptografado e recuperação</h3>
@@ -79,7 +79,7 @@ export const OperationalCenter:React.FC<{db:AppDatabase;user:User;onReload:()=>P
    <h3 className="font-semibold">Registro de acessos e alterações</h3>
    <button disabled={busy} className="border rounded p-3" onClick={()=>void run(async()=>{setAudit(await operationalRpc('operational_audit_list'));})}>Consultar eventos recentes</button>
    <div className="overflow-auto"><table className="w-full text-sm"><thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Registro</th></tr></thead><tbody>{audit.map(a=><tr key={a.id} className="border-t"><td>{new Date(a.occurred_at).toLocaleString('pt-BR')}</td><td>{a.actor_name}</td><td>{a.action}</td><td>{a.resource} · {db.patients.find(p=>p.id===a.patient_id)?.name||a.patient_id||a.record_id||'Sistema'}</td></tr>)}</tbody></table></div>
-   {audit.length===200&&<button disabled={busy} onClick={()=>void run(async()=>{const next=await operationalRpc('operational_audit_list',{p_before:audit[audit.length-1].occurred_at});setAudit([...audit,...next]);})}>Carregar eventos anteriores</button>}
+   {audit.length>0&&audit.length%200===0&&<button disabled={busy} onClick={()=>void run(async()=>{const next=await operationalRpc('operational_audit_list',{p_before:audit[audit.length-1].occurred_at,p_before_id:audit[audit.length-1].id});setAudit([...audit,...next]);})}>Carregar eventos anteriores</button>}
   </div></>}
  </section>;
 };

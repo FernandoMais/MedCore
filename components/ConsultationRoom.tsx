@@ -141,9 +141,11 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
         setConduct(data.conduct || '');
         setDiagnosis(data.diagnosis || '');
         setPrescription(data.prescription || '');
+        setNewSigilousNote(data.privateNote || '');
         }
       } catch {
         if(alive)setFinishError('Não foi possível abrir o rascunho protegido. Entre novamente com sua conta; não descarte as pendências.');
+        return;
       }
       if(alive)setDraftLoaded(true);
     })();
@@ -162,11 +164,11 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
 
   useEffect(() => {
     if (!draftLoaded) return;
-    const draft = { complaint, conduct, diagnosis, prescription, appointmentId };
+    const draft = { complaint, conduct, diagnosis, prescription, appointmentId, privateNote:newSigilousNote };
     void draftVault.write(draftKey,draft).catch(()=>{
       setFinishError('Não foi possível guardar o rascunho neste computador. Não feche a tela antes da confirmação de gravação.');
     });
-  }, [complaint, conduct, diagnosis, prescription, appointmentId, draftLoaded, draftKey]);
+  }, [complaint, conduct, diagnosis, prescription, appointmentId, newSigilousNote, draftLoaded, draftKey]);
 
   const handleAiAssist = async () => {
     if (!complaint) {
@@ -230,6 +232,10 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
 
   const handleFinalize = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) e.preventDefault();
+    if (!draftLoaded) {
+      setFinishError('O rascunho protegido precisa ser recuperado antes de finalizar. Entre novamente; não descarte as pendências.');
+      return;
+    }
     if (finishingRef.current) return;
     if (!complaint.trim()) {
       alert("A 'Queixa Principal / Evolução' é obrigatória para finalizar o atendimento.");
@@ -782,7 +788,7 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
                 <button 
                   type="button"
                   onClick={handleFinalize}
-                  disabled={isFinishing}
+                  disabled={isFinishing || !draftLoaded}
                   className={`w-full py-6 rounded-[32px] font-black text-sm shadow-2xl flex items-center justify-center space-x-3 transition-all active:scale-95 ${isFinishing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'}`}
                 >
                   {isFinishing ? <RefreshCw size={20} className="animate-spin" /> : <CheckCircle size={20} />}

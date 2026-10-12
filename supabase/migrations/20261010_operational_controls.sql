@@ -383,8 +383,8 @@ declare a public.users; u public.users; begin
  if u.id is null or p_role not in ('admin','doctor','collaborator') then raise exception 'Perfil inválido.'; end if;
  if u.id=a.id and not p_active then raise exception 'Não é permitido desativar o próprio acesso.'; end if;
  if u.role='admin' and u.active and (not p_active or p_role<>'admin')
- and (select count(*) from public.users u join auth.users au on au.id=u."authUserId"
- where u."clinicId"=a."clinicId" and u.role='admin' and u.active and au.email_confirmed_at is not null)<=1 then raise exception 'A clínica precisa manter um administrador ativo e confirmado.'; end if;
+ and (select count(*) from public.users member join auth.users au on au.id=member."authUserId"
+ where member."clinicId"=a."clinicId" and member.role='admin' and member.active and au.email_confirmed_at is not null)<=1 then raise exception 'A clínica precisa manter um administrador ativo e confirmado.'; end if;
  if p_role='doctor' and u.doctor_id is null then raise exception 'Vincule um cadastro de médico antes de atribuir esse perfil.'; end if;
  perform set_config('app.operational_write','yes',true);
  perform set_config('app.operational_staff_write','yes',true);
@@ -409,16 +409,17 @@ begin
  return new;
 end $$;
 
-create or replace function public.operational_audit_list(p_patient_id text default null,p_before timestamptz default null)
+drop function if exists public.operational_audit_list(text,timestamptz);
+create or replace function public.operational_audit_list(p_patient_id text default null,p_before timestamptz default null,p_before_id uuid default null)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $$
 declare a public.users; r jsonb; begin
  a:=public.operational_actor(); if a.role<>'admin' then raise exception using errcode='42501',message='Auditoria exige administrador.'; end if;
  select coalesce(jsonb_agg(to_jsonb(x)),'[]') into r from
  (select * from public.operational_audit where clinic_id=a."clinicId" and (p_patient_id is null or patient_id=p_patient_id)
- and (p_before is null or occurred_at<p_before) order by occurred_at desc,id desc limit 200) x;
+ and (p_before is null or occurred_at<p_before or (occurred_at=p_before and p_before_id is not null and id<p_before_id)) order by occurred_at desc,id desc limit 200) x;
  return r; end $$;
-revoke all on function public.operational_audit_list(text,timestamptz) from public,anon;
-grant execute on function public.operational_audit_list(text,timestamptz) to authenticated;
+revoke all on function public.operational_audit_list(text,timestamptz,uuid) from public,anon;
+grant execute on function public.operational_audit_list(text,timestamptz,uuid) to authenticated;
 
 create or replace function public.operational_validate_restore(p_backup jsonb) returns jsonb
 language plpgsql security definer set search_path=pg_catalog,public as $$
@@ -474,7 +475,7 @@ declare a public.users; t text; rows jsonb; r jsonb; oldrow jsonb; keycol text; 
   select string_agg(quote_ident(attname),',' order by attnum) into cols from pg_attribute where attrelid=('public.'||t)::regclass
    and attnum>0 and not attisdropped and attgenerated='';
   for r in select value from jsonb_array_elements(rows) loop
-   k:=r->>keycol; execute format('select to_jsonb(x) from public.%I x where %I=$1 for update',t,keycol) into oldrow using k;
+   k:=r->>keycol; execute format('select to_jsonb(x) from public.%I x where %I=(jsonb_populate_record(null::public.%I,$1)).%I for update',t,keycol,t,keycol) into oldrow using r;
    if oldrow is not null then
     if oldrow<>r then raise exception using errcode='PT409',message='Restauração suspensa: existem registros diferentes. Nenhum dado atual será sobrescrito.'; end if;
    else

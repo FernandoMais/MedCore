@@ -10,3 +10,4 @@
 - [Supabase Management API quirks](supabase-management-quirks.md) — valid issued JWTs can differ; check migrated log queries for body errors, not HTTP status alone.
 - [Intended outpatient use](outpatient-use.md) — the system is intended for real ambulatory care; clinical persistence and confidentiality are release requirements.
 - [Clinical privacy boundaries](clinical-privacy-boundaries.md) — shared passwords and tighter RLS do not protect historical copies; sensitive classification must survive profile changes.
+- [Operational safety decisions](operational-safety-decisions.md) — non-retryable stale-write conflicts, role-bound draft keys and application versus provider recovery.

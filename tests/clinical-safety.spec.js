@@ -65,6 +65,18 @@ test('failed finalization keeps the draft and screen; successful retry clears it
   await expect.poll(() => page.evaluate(k => window.draftVault.read(k), key)).toBeNull();
 });
 
+test('unreadable encrypted draft is preserved instead of being overwritten',async({page})=>{
+ await fixture(page);
+ const key='medcore-encrypted-draft:auth-fixture:medcore_consult_draft_clinic-fixture_staff-fixture_appointment-fixture';
+ const corrupted='{"iv":"invalid","data":"invalid"}';
+ await page.evaluate(({key,corrupted})=>localStorage.setItem(key,corrupted),{key,corrupted});
+ await page.reload();
+ await expect(page.getByRole('alert')).toContainText('Não foi possível abrir o rascunho protegido');
+ await page.getByPlaceholder('Relate atual do paciente...').fill('Novo texto exclusivamente fictício');
+ await expect(page.getByRole('button',{name:'Finalizar e Gravar Atendimento'})).toBeDisabled();
+ expect(await page.evaluate(k=>localStorage.getItem(k),key)).toBe(corrupted);
+});
+
 test('a rejected private note retains the text instead of reporting success', async ({ page }) => {
   await fixture(page);
   await page.getByRole('button', { name: 'Menu de informações sigilosas' }).click();

@@ -25,17 +25,20 @@ Deno.serve(async request=>{
    const ban=data.authUserId?await service.auth.admin.updateUserById(data.authUserId,{ban_duration:data.active?"none":"876000h"}):null;
    return reply({user:data,warning:ban?.error?"O banco já bloqueou o acesso, mas o provedor não confirmou a alteração da sessão.":undefined});
   }
-  const email=String(body.email||"").trim().toLowerCase();
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return reply({error:"Informe um e-mail válido."},400);
   const redirectTo=`${origin}/?staff-auth=recovery`;
   if(body.action==="recover"){
-   const {data:profile}=await service.from("users").select("id,authUserId,active").eq("clinicId",clinic).eq("username",email).maybeSingle();
+   let lookup=service.from("users").select("id,authUserId,active").eq("clinicId",clinic);
+   lookup=body.id?lookup.eq("id",String(body.id)):lookup.eq("username",String(body.email||"").trim().toLowerCase());
+   const {data:profile}=await lookup.maybeSingle();
    if(!profile?.authUserId||!profile.active)return reply({error:"Conta ativa não encontrada."},404);
    const target=await service.auth.admin.getUserById(profile.authUserId);
-   if(target.error||target.data.user?.email?.toLowerCase()!==email)return reply({error:"Vínculo do e-mail precisa ser revisado."},409);
+   const email=target.data.user?.email;
+   if(target.error||!email)return reply({error:"Vínculo do e-mail precisa ser revisado."},409);
    const sent=await service.auth.resetPasswordForEmail(email,{redirectTo});
    return sent.error?reply({error:"O provedor não confirmou o envio. Tente novamente mais tarde."},502):reply({sent:true});
   }
+  const email=String(body.email||"").trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return reply({error:"Informe um e-mail válido."},400);
   if(body.action!=="invite"||!["admin","doctor","collaborator"].includes(body.role))return reply({error:"Operação inválida."},400);
   const name=String(body.name||"").trim();if(!name||name.length>120)return reply({error:"Nome inválido."},400);
   let existing:any=null;
@@ -53,6 +56,8 @@ Deno.serve(async request=>{
   if(invited.error||!invited.data.user)return reply({error:"Não foi possível enviar o convite. Verifique o provedor e se este e-mail já possui outra conta."},502);
   const uid=invited.data.user.id;
   try {
+   const rechecked=await service.from("users").select("id").eq("id",actor.id).eq("authUserId",verified.data.user.id).eq("clinicId",clinic).eq("role","admin").eq("active",true).maybeSingle();
+   if(rechecked.error||!rechecked.data)throw Error("authority");
    if(doctorId&&!existing?.doctor_id){
     const inserted=await service.from("doctors").insert({id:doctorId,name,crm:String(body.crm).trim(),specialty:String(body.specialty).trim(),email,phone:String(body.phone||""),"clinicId":clinic,active:true,availableTimes:[{dayOfWeek:"Segunda",startTime:"08:00",endTime:"18:00"}]});
     if(inserted.error)throw Error("doctor");

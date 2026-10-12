@@ -33,7 +33,7 @@ try {
  const admin=await person(anon,`ops-admin-${tag}@example.invalid`,'admin');
  const other=await person(anon,`ops-other-${tag}@example.invalid`,'doctor',ids.otherD);
  const patient=await person(anon,`ops-patient-${tag}@example.invalid`,'patient');
- checked(await service.from('patients').insert({id:ids.p,name:'Paciente fictício',birthDate:'1990-01-01',gender:'Masculino',cpf:tag.replaceAll('-','').slice(0,11),email:patient.email,clinicId:clinic,primaryDoctorId:ids.d,authUserId:patient.uid,history:'Histórico legado fictício restrito'}));
+ checked(await service.from('patients').insert({id:ids.p,name:'Paciente fictício',birthDate:'1990-01-01',gender:'Masculino',cpf:tag.replaceAll('-','').slice(0,11),email:patient.email,clinicId:clinic,primaryDoctorId:ids.d,authUserId:patient.uid,history:'Histórico legado fictício restrito',files:[{id:`file-${tag}`,name:'Anexo fictício.txt',url:'data:text/plain;base64,dGVzdGU='}]}));
  checked(await service.from('appointments').insert({id:ids.a,patientId:ids.p,doctorId:ids.d,date:'2026-10-10',time:'10:00',status:'Agendado',type:'Consulta',clinicId:clinic,serviceValue:100,repassRule:{type:'percentage',value:20}}));
  stage='snapshots';
  const first=await rpc(owner.client,'operational_snapshot');
@@ -87,12 +87,22 @@ try {
  stage='typed_backup_validation';
  const proof=await rpc(admin.client,'operational_validate_restore',{p_backup:subset});
  assert.equal(proof.validated,true);assert.equal(proof.productionRowsChanged,false);
- // Delete only the fictitious private note, then recover it through the real RPC.
+ // Recover a complete synthetic clinical chain, including its account binding,
+ // embedded attachment, original author and generated financial records.
+ for(const table of ['financial_transactions','financial_repasses'])checked(await service.from(table).delete().eq('appointmentId',ids.a));
+ checked(await service.from('evolucao_paciente').delete().eq('paciente_id',ids.p));
  checked(await service.from('sigilous_notes').delete().eq('id',ids.n));
- stage='missing_note_restore';
+ checked(await service.from('appointments').delete().eq('id',ids.a));
+ checked(await service.from('patients').delete().eq('id',ids.p));
+ stage='complete_synthetic_clinical_restore';
  const restored=await rpc(admin.client,'operational_restore_merge',{p_backup:subset});
  assert.equal(restored.overwritten,0);
- assert.equal(checked(await service.from('sigilous_notes').select('id').eq('id',ids.n)).length,1);
+ assert.equal(restored.inserted,6);
+ for(const table of ['patients','appointments','sigilous_notes','evolucao_paciente','financial_transactions','financial_repasses']){
+  const wanted=subset.tables[table][0];
+  const actual=checked(await service.from(table).select('*').eq('id',wanted.id).single());
+  assert.deepEqual(actual,wanted);
+ }
  const again=await rpc(admin.client,'operational_restore_merge',{p_backup:subset});
  assert.equal(again.inserted,0);
  const foreign=await admin.client.rpc('operational_validate_restore',{p_backup:{...subset,clinicId:randomUUID()}});
