@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import ConsultationBoundary from './components/ConsultationBoundary';
 import { 
   Users, 
   Calendar, 
@@ -670,6 +671,10 @@ const App: React.FC = () => {
             <OperationalCenter db={db} user={currentUser} onReload={reloadOperationalData}/>
           )}
           {currentView === 'consultation' && activeAppointmentId && (
+            <ConsultationBoundary key={activeAppointmentId} onBack={() => {
+              setActiveAppointmentId(null);
+              setCurrentView('agenda');
+            }}>
             <ConsultationRoom 
               key={activeAppointmentId}
               appointmentId={activeAppointmentId} 
@@ -694,6 +699,7 @@ const App: React.FC = () => {
               }}
               onFinish={handleFinishConsultation}
             />
+            </ConsultationBoundary>
           )}
         </div>
       </main>

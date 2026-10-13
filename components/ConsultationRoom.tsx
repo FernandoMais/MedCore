@@ -362,7 +362,15 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
     );
   };
 
-  if (!patient || !appointment) return null;
+  if (!patient || !appointment) return (
+    <div role="alert" className="bg-white rounded-2xl p-6 space-y-4">
+      <h2 className="font-bold text-lg">Atendimento indisponível</h2>
+      <p>O agendamento ou o paciente não está disponível nesta sessão. Volte à agenda e atualize os dados antes de continuar.</p>
+      <button type="button" className="bg-blue-600 text-white rounded-xl px-4 py-2" onClick={() => void onFinish()}>
+        Voltar à agenda
+      </button>
+    </div>
+  );
 
   return (
     <div id="print-area" className="max-w-[100%] mx-auto space-y-6 pb-20 animate-in fade-in duration-500 flex flex-col">
@@ -456,11 +464,15 @@ const ConsultationRoom: React.FC<ConsultationRoomProps> = ({
               <div className="flex items-center space-x-2 lg:space-x-3 text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
                 <span className="bg-slate-100 px-1.5 py-0.5 rounded shadow-inner truncate">{appointment.type}</span>
                 <span className="text-blue-600 truncate">CPF: {patient.cpf}</span>
-                 {appointment.serviceValue !== undefined && (
+                 {(
                    <span className="text-emerald-600 truncate">
-                     R$ {appointment.serviceValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                     {typeof appointment.serviceValue === 'number' && Number.isFinite(appointment.serviceValue)
+                       ? `R$ ${appointment.serviceValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                       : 'Valor não informado'}
                      {appointment.repassRule
-                       ? ` • Repasse ${appointment.repassRule.type === 'percentage' ? `${appointment.repassRule.value}%` : `R$ ${appointment.repassRule.value.toFixed(2)}`}`
+                       ? (typeof appointment.repassRule.value === 'number' && Number.isFinite(appointment.repassRule.value)
+                         ? ` • Repasse ${appointment.repassRule.type === 'percentage' ? `${appointment.repassRule.value}%` : `R$ ${appointment.repassRule.value.toFixed(2)}`}`
+                         : ' • Repasse não informado')
                        : ''}
                    </span>
                  )}
