@@ -30,14 +30,17 @@ Do not report online collection as operational before a provider is connected
 and its eligible methods, asynchronous confirmation and duplicate prevention
 are verified.
 
-The clinic's requested payment provider is Asaas.
+The clinic requires client receipts to be centralized in its existing Asaas
+account and explicitly declines Stripe and Whop.
 
-**Why:** The owner says they already use Asaas and asked to connect that existing
-account rather than opening a different payment-provider account.
+**Why:** The owner wants all payments concentrated in the same account, not
+another payment-provider account.
 
-**How to apply:** Check available integration capabilities before proposing a
-replacement. Do not connect Stripe or Whop without the owner's choice. Never
-retain bank identifiers or API credentials in project memory.
+**How to apply:** Do not propose or connect Stripe or Whop again unless the owner
+changes this requirement. Verify live integration capabilities and state any
+implementation limitation explicitly. Do not enable automatic split to other
+accounts without separate approval. Never retain bank identifiers or API
+credentials in project memory.
 
 Consultation prices should be configurable and associated with one or several
 doctors, showing the professional's repasse and the clinic's administrative
