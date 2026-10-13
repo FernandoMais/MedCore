@@ -42,6 +42,16 @@ implementation limitation explicitly. Do not enable automatic split to other
 accounts without separate approval. Never retain bank identifiers or API
 credentials in project memory.
 
+The owner indicated `www.airi.restauraintegral.com.br` as the intended public
+hostname for the payment integration.
+
+**Why:** The owner supplied this address when discussing the webhook.
+
+**How to apply:** Treat it as an intended hostname, not evidence of a deployed
+application or an active webhook. Verify DNS, HTTPS and the actual server
+endpoint before configuration. Payment-webhook failure alerts are intended for
+the clinic's administrative mailbox, separate from the webhook URL.
+
 Consultation prices should be configurable and associated with one or several
 doctors, showing the professional's repasse and the clinic's administrative
 share. Administrative staff need individual professional and global reports.
