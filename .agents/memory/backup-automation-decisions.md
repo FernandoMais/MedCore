@@ -4,7 +4,8 @@ description: Clinic-approved scheduling, retention and destination requirements 
 ---
 
 The clinic approved daily backups at 02:00 in America/Sao_Paulo, with 60-day
-retention and failure alerts to its administrative mailbox. The destination is
+retention and failure alerts to the mailbox explicitly designated by the owner,
+which may differ from the administrative SMTP sender. The destination is
 an owner-designated private Google Drive folder. Store only encrypted backups.
 Do not record account addresses or protection phrases in project memory.
 
@@ -25,3 +26,12 @@ the required destination.
 **How to apply:** Verify the currently authorized account and the chosen folder's
 permissions before uploading clinical data; disclose the destination account
 without storing account addresses in project memory.
+
+Keep the alert recipient independent from the authenticated SMTP sender.
+
+**Why:** The owner redirected alerts to the backup-management mailbox instead
+of the original administrative mailbox.
+
+**How to apply:** Use the configured alert recipient for notifications, but
+authenticate with the sender's credentials. Changing the recipient does not
+change the sending provider or prove SMTP delivery.

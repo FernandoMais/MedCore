@@ -1,10 +1,20 @@
 import tls from 'node:tls';
 import net from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { smtpSettings } from './configure-auth-smtp.mjs';
 
-// One optional test message, always to the configured sender itself. No Auth
-// account is created and no real user's password or recovery token is changed.
+// One optional test message to the sender, or an explicitly selected recipient.
+// No Auth account is created and no password or recovery token is changed.
 const settings = smtpSettings(process.env);
+const recipientIndex = process.argv.indexOf('--recipient');
+const recipient = recipientIndex < 0
+  ? settings.smtp_admin_email : process.argv[recipientIndex + 1];
+if (!recipient || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(recipient)) {
+  throw new Error('Informe um destinatário de teste válido.');
+}
+if (recipientIndex >= 0 && !process.argv.includes('--send-test')) {
+  throw new Error('O destinatário de teste exige a opção --send-test.');
+}
 let socket = settings.smtp_port === '587'
   ? net.connect({ host: settings.smtp_host, port: 587 })
   : tls.connect({
@@ -90,15 +100,23 @@ try {
   }
   let testMessageAccepted = false;
   if (process.argv.includes('--send-test')) {
+    const backupAlert = process.argv.includes('--backup-alert-test');
     await expect([250], `MAIL FROM:<${settings.smtp_admin_email}>`);
-    await expect([250, 251], `RCPT TO:<${settings.smtp_admin_email}>`);
+    await expect([250, 251], `RCPT TO:<${recipient}>`);
     await expect([354], 'DATA');
     const content = [
-      `From: <${settings.smtp_admin_email}>`, `To: <${settings.smtp_admin_email}>`,
-      'Subject: Teste de envio - Restaura Integral',
+      `From: <${settings.smtp_admin_email}>`, `To: <${recipient}>`,
+      backupAlert ? 'Subject: Teste de alerta de backup - MedCore'
+        : 'Subject: Teste de envio - Restaura Integral',
+      `Message-ID: <${randomUUID()}@${settings.smtp_admin_email.split('@')[1]}>`,
       `Date: ${new Date().toUTCString()}`, 'MIME-Version: 1.0',
       'Content-Type: text/plain; charset=utf-8', '',
-      'Teste de conexao SMTP para envio de convites do sistema.',
+      backupAlert ? 'Teste solicitado do canal de alertas de backup do MedCore.'
+        : 'Teste de conexao SMTP para envio de convites do sistema.',
+      ...(backupAlert ? [
+        'Esta mensagem nao contem dados de pacientes.',
+        'O recebimento deste teste nao significa que o backup automatico ja esta ativo.',
+      ] : []),
       'Esta mensagem nao altera contas ou senhas e nao requer nenhuma acao.',
       '.', '',
     ].join('\r\n');
