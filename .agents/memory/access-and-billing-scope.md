@@ -30,6 +30,15 @@ Do not report online collection as operational before a provider is connected
 and its eligible methods, asynchronous confirmation and duplicate prevention
 are verified.
 
+The clinic's requested payment provider is Asaas.
+
+**Why:** The owner says they already use Asaas and asked to connect that existing
+account rather than opening a different payment-provider account.
+
+**How to apply:** Check available integration capabilities before proposing a
+replacement. Do not connect Stripe or Whop without the owner's choice. Never
+retain bank identifiers or API credentials in project memory.
+
 Consultation prices should be configurable and associated with one or several
 doctors, showing the professional's repasse and the clinic's administrative
 share. Administrative staff need individual professional and global reports.
