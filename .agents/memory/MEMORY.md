@@ -11,3 +11,4 @@
 - [Intended outpatient use](outpatient-use.md) — the system is intended for real ambulatory care; clinical persistence and confidentiality are release requirements.
 - [Clinical privacy boundaries](clinical-privacy-boundaries.md) — shared passwords and tighter RLS do not protect historical copies; sensitive classification must survive profile changes.
 - [Operational safety decisions](operational-safety-decisions.md) — non-retryable stale-write conflicts, role-bound draft keys and application versus provider recovery.
+- [Automated backups](backup-automation-decisions.md) — daily at 02:00 São Paulo, 60-day retention, encrypted private Drive destination and administrative failure alerts.
