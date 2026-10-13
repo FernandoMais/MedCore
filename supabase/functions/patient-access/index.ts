@@ -840,6 +840,13 @@ async function adminReset(
   const { data: verified, error: verifyError } = await service.auth.getUser(token);
   if (verifyError || !verified.user?.id) return json({ error: "Não autorizado." }, 401);
 
+  const scoped = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const sessionCheck = await scoped.rpc("operational_session_valid");
+  if (sessionCheck.error || sessionCheck.data !== true) return json({ error: "Sessão encerrada. Entre novamente." }, 401);
+
   const { data: staff, error: staffError } = await service
     .from("users")
     .select("id,role,active,clinicId,authUserId")

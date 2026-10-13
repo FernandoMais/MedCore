@@ -19,6 +19,45 @@ Deno.serve(async request=>{
   const raw=await request.text();if(raw.length>32768)return reply({error:"Solicitação muito grande."},413);
   const body=JSON.parse(raw);
   const caller=createClient(url,Deno.env.get("SUPABASE_ANON_KEY")!,{auth:{persistSession:false},global:{headers:{Authorization:`Bearer ${token}`}}});
+  const sessionCheck=await caller.rpc("operational_session_valid");
+  if(sessionCheck.error||sessionCheck.data!==true)return reply({error:"Sessão encerrada. Entre novamente."},401);
+  if(body.action==="set-password"){
+   if(!["staff","patient"].includes(body.kind)||typeof body.id!=="string"||body.id.length>200
+    ||typeof body.password!=="string"||body.password.length<8||body.password.length>128
+    ||typeof body.currentPassword!=="string"||!body.currentPassword||body.currentPassword.length>128){
+    return reply({error:"Informe a conta, sua senha administrativa e uma nova senha de 8 a 128 caracteres."},400);
+   }
+   const authorized=await service.rpc("operational_password_authorize",{
+    p_actor_uid:verified.data.user.id,p_kind:body.kind,p_id:body.id});
+   if(authorized.error)return reply({error:authorized.error.message},403);
+   const operationId=authorized.data.operationId;
+   let changed=false;
+   const proof=createClient(url,Deno.env.get("SUPABASE_ANON_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
+   try{
+    const authenticated=await proof.auth.signInWithPassword({
+     email:verified.data.user.email!,password:body.currentPassword});
+    if(authenticated.error||authenticated.data.user?.id!==verified.data.user.id){
+     return reply({error:"Sua senha administrativa não foi confirmada. Nenhuma senha foi alterada."},403);
+    }
+    const rechecked=await service.rpc("operational_password_authorize",{
+     p_actor_uid:verified.data.user.id,p_kind:body.kind,p_id:body.id,p_operation_id:operationId});
+    if(rechecked.error)return reply({error:"A permissão ou o vínculo mudou. A alteração foi interrompida."},403);
+    const targetUid=rechecked.data.authUserId;
+    const account=await service.auth.admin.getUserById(targetUid);
+    if(account.error||!account.data.user)return reply({error:"Conta autenticada não encontrada."},409);
+    // Updating a password must not confirm e-mail, enable a banned account,
+    // replace identity metadata, or change the protected profile binding.
+    const updated=await service.auth.admin.updateUserById(targetUid,{password:body.password});
+    if(updated.error)return reply({error:"O provedor recusou a nova senha. Use uma senha forte diferente da anterior."},422);
+    changed=true;
+    const recorded=await service.rpc("operational_password_result",{p_operation_id:operationId,p_success:true});
+    return reply({changed:true,emailConfirmationRequired:!account.data.user.email_confirmed_at,
+     warning:recorded.error?"Senha alterada; o registro final de auditoria precisa de revisão.":undefined});
+   }finally{
+    if(!changed)await service.rpc("operational_password_result",{p_operation_id:operationId,p_success:false});
+    await proof.auth.signOut({scope:"local"}).catch(()=>{});
+   }
+  }
   if(body.action==="change"){
    const {data,error}=await caller.rpc("operational_staff_change",{p_id:String(body.id),p_active:body.active===true,p_role:String(body.role)});
    if(error)return reply({error:error.message},400);

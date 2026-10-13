@@ -13,3 +13,15 @@ invitations or confidential links handed out by the clinic.
 **How to apply:** Preserve patient CPF login and staff email login. Account
 creation and activation must have explicit outcomes; a saved clinical or staff
 profile alone must never be presented as working authenticated access.
+
+Direct password changes are now an explicitly requested supplementary
+administrative option, not a replacement for email invitations.
+
+**Why:** The owner requested a password-change field in user profiles visible
+and usable only by administrators.
+
+**How to apply:** Restrict direct changes to an active administrator in the same
+clinic, require confirmation of the administrator's current credential, and
+keep secrets out of profiles, backups and audit records. Do not implicitly
+confirm an email, reactivate a disabled account or change its identity binding.
+Keep staff email login and patient CPF login unchanged.

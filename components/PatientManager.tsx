@@ -26,6 +26,7 @@ import RestrictedHistory from './RestrictedHistory';
 import PatientEvolution from './PatientEvolution';
 import { supabase } from '../services/supabase';
 import { requestAdminPatientReset } from '../services/patientAuth';
+import {AdminPasswordEditor} from './AdminPasswordEditor';
 
 interface PatientManagerProps {
   patients: Patient[];
@@ -466,6 +467,9 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
                       {resettingPatientId === selectedPatient.id ? <RefreshCw size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
                       <span>{resettingPatientId === selectedPatient.id ? 'Enviando...' : 'Enviar link para criar/redefinir senha'}</span>
                     </button>
+                  </div>
+                  <div className="mt-3">
+                    <AdminPasswordEditor key={`password-${selectedPatient.id}`} user={currentUser} kind="patient" targetId={selectedPatient.id} targetName={selectedPatient.name} linked={Boolean((selectedPatient as PatientAuthMetadata).authUserId)&&!(selectedPatient as any).archived}/>
                   </div>
                 </div>
               )}

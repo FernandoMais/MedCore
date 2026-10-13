@@ -4,6 +4,7 @@ import {encryptBackup,decryptBackup,downloadEncryptedBackup} from '../services/b
 import {supabase} from '../services/supabase';
 import type {AppDatabase} from '../services/storage';
 import type {User} from '../types';
+import {AdminPasswordEditor} from './AdminPasswordEditor';
 
 export const OperationalCenter:React.FC<{db:AppDatabase;user:User;onReload:()=>Promise<void>;team?:boolean}>=({db,user,onReload,team})=>{
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[password,setPassword]=useState('');
@@ -65,6 +66,7 @@ export const OperationalCenter:React.FC<{db:AppDatabase;user:User;onReload:()=>P
     if(!confirm(`Alterar o perfil de ${u.name} para ${role}?`))return;await storage.syncToCloud(db,user.clinicId);await staff({action:'change',id:u.id,active:(u as any).active!==false,role});await onReload();setMessage('Perfil confirmado pelo servidor.');
    });}}><option value="admin">Administrador</option><option value="doctor">Clínico</option><option value="collaborator">Colaborador</option></select>
    {(u as any).authUserId&&<button disabled={busy} className="border rounded px-3 py-2" onClick={()=>void run(async()=>{await staff({action:'recover',id:u.id});setMessage('O provedor aceitou o envio do link para o e-mail autenticado da conta vinculada.');})}>Enviar recuperação</button>}
+   <AdminPasswordEditor key={`password-${u.id}`} user={user} kind="staff" targetId={u.id} targetName={u.name} linked={Boolean((u as any).authUserId)&&(u as any).active!==false}/>
   </div>)}</div></>:<>
   <div className="bg-white border rounded-xl p-5 space-y-3">
    <h3 className="font-semibold">Backup criptografado e recuperação</h3>

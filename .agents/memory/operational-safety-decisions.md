@@ -36,3 +36,22 @@ requirements; restoring canonical clinical rows alone does not restore login.
 non-destructive recovery with synthetic records. Require a separately verified
 provider backup and an isolated full recovery rehearsal before claiming disaster
 recovery readiness. Never test destructive restoration against real patient data.
+
+Password resets must revoke clinical access for old sessions, including sessions
+whose JWTs are refreshed after the reset.
+
+**Why:** A changed Auth password alone is not sufficient evidence that previously
+issued signed tokens have stopped accessing data through database APIs.
+
+**How to apply:** Check the original native session creation time against the
+reset boundary, not merely the refreshed token's issuance time. Enforce this at
+both definer routines and row policies, and at service-backed authenticated
+endpoints. Test old tokens as well as successful fresh login.
+
+Reapplying baseline security controls must preserve later hardening atomically.
+
+**Why:** Baseline migrations recreate permission helpers and can silently undo
+newer session checks even while all SQL statements succeed.
+
+**How to apply:** Apply dependent hardening in the same transaction as the baseline
+installer. Keep regression checks for previously revoked sessions after reruns.
