@@ -30,8 +30,12 @@ without storing account addresses in project memory.
 Keep the alert recipient independent from the authenticated SMTP sender.
 
 **Why:** The owner redirected alerts to the backup-management mailbox instead
-of the original administrative mailbox.
+of the original administrative mailbox, then confirmed receipt of a direct
+SMTP test through the clinic's existing mail provider. A Gmail recipient does
+not require replacing that sending provider.
 
 **How to apply:** Use the configured alert recipient for notifications, but
 authenticate with the sender's credentials. Changing the recipient does not
-change the sending provider or prove SMTP delivery.
+change the sending provider or prove SMTP delivery. Preserve the distinction
+between the confirmed alert transport and unverified scheduled execution or
+native Auth recovery links; retest delivery after mail configuration changes.
