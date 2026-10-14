@@ -42,7 +42,7 @@ implementation limitation explicitly. Do not enable automatic split to other
 accounts without separate approval. Never retain bank identifiers or API
 credentials in project memory.
 
-The owner indicated `www.airi.restauraintegral.com.br` as the intended public
+The owner indicated `airi.restauraintegral.com.br` (without `www`) as the intended public
 hostname for the payment integration.
 
 **Why:** The owner supplied this address when discussing the webhook.
