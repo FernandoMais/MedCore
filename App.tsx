@@ -51,6 +51,9 @@ import PatientSelfRegister from './components/PatientSelfRegister';
 import PatientLogin from './components/PatientLogin';
 import PatientPortal from './components/PatientPortal';
 import FinancialModule from './components/FinancialModule';
+import ManualPayments from './components/ManualPayments';
+import { sendPaymentLink } from './services/manualPayments';
+import { operationalRpc } from './services/operationalStorage';
 import PatientPasswordReset from './components/PatientPasswordReset';
 import StaffPasswordReset from './components/StaffPasswordReset';
 import { freshStartEnabled } from './services/freshStart';
@@ -194,6 +197,7 @@ const App: React.FC = () => {
 
   const reloadOperationalData=async()=>{
     if(!currentUser)return;
+    await storage.syncToCloud(db,currentUser.clinicId);
     const fresh=await storage.fetchFromCloud(currentUser.clinicId);
     setDb(prev=>({...prev,...fresh}));
     const me=fresh.users?.find(u=>u.id===currentUser.id);
@@ -260,6 +264,8 @@ const App: React.FC = () => {
           onAddAppointment={async (appt) => {
             const saved = await bookPatientAppointment(loggedPatient, appt);
             setPatientPortalData(prev => ({ ...prev, appointments: [saved, ...prev.appointments] }));
+            const mail = saved.paymentUrl ? await sendPaymentLink(saved.id, true) : null;
+            return {paymentUrl: saved.paymentUrl, emailSent: mail?.sent, emailError: mail?.error};
           }}
           onLogout={returnHome}
         />
@@ -308,7 +314,8 @@ const App: React.FC = () => {
     </div>;
   }
 
-  const seesAllRecords = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.COLLABORATOR;
+  const financeManager = [UserRole.ADMIN, UserRole.COLLABORATOR, UserRole.SECRETARY, UserRole.TREASURY].includes(currentUser.role);
+  const seesAllRecords = financeManager;
 
   const filteredPatients = (db.patients || []).filter(p =>
     seesAllRecords || p.primaryDoctorId === currentUser.doctorId
@@ -467,7 +474,8 @@ const App: React.FC = () => {
           <SidebarItem view="agenda" icon={<Calendar size={18} />} label="Minha Agenda" />
           <SidebarItem view="patients" icon={<Users size={18} />} label="Meus Pacientes" />
           <SidebarItem view="medications" icon={<Pill size={18} />} label="Medicamentos" />
-          <div className="pt-3 mt-3 border-t border-slate-100">
+          <SidebarItem view="manual-payments" icon={<Wallet size={18} />} label={currentUser.role === UserRole.DOCTOR ? 'Meus proventos' : 'Cobranças e repasses'} />
+          {financeManager && <div className="pt-3 mt-3 border-t border-slate-100">
             <button
               onClick={() => {
                 setCurrentView('finance');
@@ -504,9 +512,9 @@ const App: React.FC = () => {
                 ))}
               </div>
             )}
-          </div>
+          </div>}
           <SidebarItem view="reports" icon={<BarChart3 size={18} />} label="Relatórios" adminOnly />
-          <SidebarItem view="doctors" icon={<Heart size={18} />} label="Corpo Clínico" adminOnly />
+          <SidebarItem view="doctors" icon={<Heart size={18} />} label="Corpo Clínico" allowedRoles={[UserRole.ADMIN,UserRole.COLLABORATOR,UserRole.SECRETARY,UserRole.TREASURY]} />
           <SidebarItem view="backups" icon={<Download size={18} />} label="Exportar Dados" adminOnly />
         </nav>
 
@@ -593,6 +601,20 @@ const App: React.FC = () => {
           {currentView === 'dashboard' && <Dashboard patientsCount={filteredPatients.length} appointments={filteredAppointments} doctorsCount={(db.doctors || []).length} />}
           {currentView === 'agenda' && (
             <Agenda 
+              onCreateAppointment={async appointment => {
+                await storage.syncToCloud(db,currentUser.clinicId);
+                await operationalRpc('operational_sync',{p_changes:[{
+                  table:'appointments',id:appointment.id,expected:null,row:appointment,
+                }]});
+                const fresh=await storage.fetchFromCloud(currentUser.clinicId);
+                setDb(prev=>({...prev,...fresh}));
+                const saved=fresh.appointments?.find(item=>item.id===appointment.id);
+                if(saved?.paymentUrl) {
+                  const mail=await sendPaymentLink(saved.id);
+                  return {emailSent:mail.sent,emailError:mail.error};
+                }
+                return {};
+              }}
               appointments={filteredAppointments} 
               setAppointments={(newA) => setDb(prev => {
                 const apptsList = prev.appointments || [];
@@ -639,7 +661,7 @@ const App: React.FC = () => {
               doctors={db.doctors || []} 
             />
           )}
-          {currentView === 'finance' && (
+          {currentView === 'finance' && financeManager && (
             <FinancialModule
               section={financeSection}
               clinicId={currentUser.clinicId}
@@ -651,9 +673,12 @@ const App: React.FC = () => {
               onUpdate={(financial) => setDb(prev => ({ ...prev, financial }))}
             />
           )}
-          {currentView === 'doctors' && (
+          {currentView === 'manual-payments' && (
+            <ManualPayments currentUser={currentUser} doctors={db.doctors || []} onChanged={reloadOperationalData}/>
+          )}
+          {currentView === 'doctors' && financeManager && (
             <div className="space-y-8">
-            <OperationalCenter db={db} user={currentUser} onReload={reloadOperationalData} team/>
+            {currentUser.role===UserRole.ADMIN && <OperationalCenter db={db} user={currentUser} onReload={reloadOperationalData} team/>}
             <DoctorRegistry providersOnly
               doctors={db.doctors || []} 
               users={[]}

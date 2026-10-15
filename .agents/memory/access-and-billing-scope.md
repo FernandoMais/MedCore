@@ -8,8 +8,14 @@ administrative and financial functions. Doctors must not have the clinic's full
 finance menu; they should see only their own earnings and their origin by patient,
 with period searches and printing/export.
 
+The owner explicitly requires the doctor's payment/earnings report to include
+only consultations that have actually been completed. At that point it may
+distinguish paid from pending. Administrative collection tracking can start at
+booking.
+
 **Why:** The owner explicitly distinguished clinic financial management from
-the professional's own remuneration and requested two administrative staff roles.
+the professional's own remuneration, requested two administrative staff roles,
+and confirmed that an unperformed appointment must not appear as medical earnings.
 
 **How to apply:** Implement backend authorization as well as menu visibility.
 Keep the separate administrator-only password-change rule and established
@@ -26,9 +32,18 @@ behaviors, rather than staff-only financial entry.
 
 **How to apply:** Price and eligibility must come from trusted server data.
 Do not equate a selected accepted insurer with verified individual coverage.
-Do not report online collection as operational before a provider is connected
-and its eligible methods, asynchronous confirmation and duplicate prevention
-are verified.
+For the owner-approved manual-link workflow, present the externally created
+checkout URL on screen and by email; authorized staff verify receipts against
+the external account and record payouts manually. Neither clicking a link nor
+receiving an email proves payment. This workflow does not require a provider
+API connection or a PHP webhook, and must not be described as automatic payment
+confirmation or automatic bank transfers.
+
+**Why:** The owner chose manually created reusable fixed-value links and manual
+repasse instead of the direct payment-provider integration.
+
+**How to apply:** Keep scheduling, receipt confirmation, clinical completion and
+repasse as separate states. Do not request provider API keys for this workflow.
 
 The clinic requires client receipts to be centralized in its existing Asaas
 account and explicitly declines Stripe and Whop.
@@ -68,3 +83,13 @@ records and authorize professional access. Keep historical price and repasse
 terms attached to each appointment rather than recalculating past care when a
 price catalogue changes. Report gross consultation value and each allocation
 separately.
+
+When a consultation price changes, create a different payment link; do not
+change the amount of the link already issued to earlier appointments.
+
+**Why:** A database price snapshot cannot protect past bookings if the same
+external reusable link is changed to collect a different amount.
+
+**How to apply:** Preserve both price and checkout URL for historical bookings.
+The manual-link calculations use the gross consultation amount; do not silently
+deduct gateway fees or change the percentage basis.

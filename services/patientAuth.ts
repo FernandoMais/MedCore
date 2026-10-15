@@ -17,7 +17,7 @@ const recoveryProof = callbackKind === 'recovery'
   && !initialUrl.searchParams.has('error');
 
 /** A different storage key prevents a patient's session replacing a staff session. */
-const patientSupabase = isSupabaseConfigured
+export const patientSupabase = isSupabaseConfigured
   ? createClient(import.meta.env.VITE_SUPABASE_URL.trim(), import.meta.env.VITE_SUPABASE_ANON_KEY.trim(), {
       auth: {
         persistSession: false,
@@ -170,7 +170,7 @@ export function clearPatientCallbackUrl(): void {
 export async function loadPatientPortal(patient: Patient): Promise<{ doctors: Doctor[]; appointments: Appointment[] }> {
   const client = requireClient();
   const [doctors, appointments] = await Promise.all([
-    client.from('patient_portal_doctors').select('id,name,crm,specialty,clinicId,availableTimes'),
+    client.from('patient_portal_doctors').select('id,name,crm,specialty,clinicId,availableTimes,consultationPrice'),
     client.from('appointments').select('*').eq('patientId', patient.id),
   ]);
   if (doctors.error || appointments.error) {

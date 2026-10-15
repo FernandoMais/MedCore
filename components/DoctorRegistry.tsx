@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Doctor, DoctorSchedule, User, UserRole } from '../types';
 import { provisionAuthAccount } from '../services/auth';
+import DoctorFeeProfile from './DoctorFeeProfile';
 
 interface DoctorRegistryProps {
   doctors: Doctor[];
@@ -529,6 +530,8 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicI
                     )}
                   </div>
                 </div>
+
+                {!isEditing && <DoctorFeeProfile doctor={selectedDoctor} />}
 
                 {/* Acesso e Credenciais (Username, Senha, Perfil) */}
                 {isEditing && editUserFormData && (

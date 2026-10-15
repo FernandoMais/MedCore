@@ -8,6 +8,7 @@ if(!process.argv.includes('--apply')) throw Error('Use --apply para o destino au
 const migrations=await Promise.all([
  'supabase/migrations/20261010_operational_controls.sql',
  'supabase/migrations/20261013_admin_password_controls.sql',
+ 'supabase/migrations/20261020_manual_payment_links.sql',
 ].map(path=>readFile(path,'utf8')));
 const query='begin;\n'+migrations.map(sql=>sql.replace(/^begin;\s*/,'').replace(/commit;\s*$/,'')).join('\n')+'\ncommit;';
 const r=await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`,{

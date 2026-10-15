@@ -26,7 +26,7 @@ export async function loginFreshStaff(
     if (profile.error || binding.error || !user
       || user.authUserId !== data.user.id || user.clinicId !== freshClinicId
       || binding.data !== user.clinicId
-      || ![UserRole.ADMIN, UserRole.DOCTOR, UserRole.COLLABORATOR].includes(user.role)) {
+      || ![UserRole.ADMIN, UserRole.DOCTOR, UserRole.COLLABORATOR, UserRole.SECRETARY, UserRole.TREASURY].includes(user.role)) {
       await supabase.auth.signOut();
       return { ok: false, error: 'Esta conta não tem acesso autorizado à nova clínica.' };
     }

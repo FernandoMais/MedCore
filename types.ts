@@ -3,6 +3,8 @@ export enum UserRole {
   ADMIN = 'admin',
   DOCTOR = 'doctor',
   COLLABORATOR = 'collaborator',
+  SECRETARY = 'secretaria',
+  TREASURY = 'tesouraria',
   PATIENT = 'patient'
 }
 
@@ -49,6 +51,7 @@ export interface Doctor {
   phone: string;
   avatar?: string;
   availableTimes: DoctorSchedule[];
+  consultationPrice?: number;
 }
 
 export type RepassRuleType = 'percentage' | 'fixed';
@@ -113,6 +116,8 @@ export interface Appointment {
   room?: string;
   serviceValue?: number;
   repassRule?: RepassRule;
+  /** Immutable checkout URL captured by the server when booking. */
+  paymentUrl?: string;
 }
 
 export interface MedicalRecord {

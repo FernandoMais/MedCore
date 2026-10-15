@@ -78,7 +78,7 @@ Deno.serve(async request=>{
   }
   const email=String(body.email||"").trim().toLowerCase();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return reply({error:"Informe um e-mail válido."},400);
-  if(body.action!=="invite"||!["admin","doctor","collaborator"].includes(body.role))return reply({error:"Operação inválida."},400);
+  if(body.action!=="invite"||!["admin","doctor","collaborator","secretaria","tesouraria"].includes(body.role))return reply({error:"Operação inválida."},400);
   const name=String(body.name||"").trim();if(!name||name.length>120)return reply({error:"Nome inválido."},400);
   let existing:any=null;
   if(body.profileId){

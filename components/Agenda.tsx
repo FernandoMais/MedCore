@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { loadManualBilling, FeeProfile } from '../services/manualPayments';
 import { freshStartEnabled } from '../services/freshStart';
 import { 
   ChevronLeft, 
@@ -31,6 +32,7 @@ interface AgendaProps {
   currentUser: any;
   onUpdateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
   startConsultation: (id: string) => void;
+  onCreateAppointment?: (appointment: Appointment) => Promise<{emailSent?: boolean; emailError?: string}>;
 }
 
 type ViewType = 'day' | 'week' | 'month';
@@ -42,7 +44,8 @@ const Agenda: React.FC<AgendaProps> = ({
   doctors, 
   currentUser,
   onUpdateAppointmentStatus,
-  startConsultation 
+  startConsultation,
+  onCreateAppointment
 }) => {
   // Helper para obter a data local no formato YYYY-MM-DD com precisão
   const getLocalDateString = (date: Date = new Date()) => {
@@ -62,6 +65,18 @@ const Agenda: React.FC<AgendaProps> = ({
   const [doctorFilter, setDoctorFilter] = useState<string>('all');
   const [roomFilter, setRoomFilter] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [fees, setFees] = useState<FeeProfile[]>([]);
+  const [feeError, setFeeError] = useState('');
+  const [loadingFees, setLoadingFees] = useState(false);
+  useEffect(() => {
+    if (!showAddModal || !onCreateAppointment) return;
+    let active=true; setLoadingFees(true); setFeeError('');
+    loadManualBilling().then(result => {if(active)setFees(result.profiles);})
+      .catch(() => {if(active)setFeeError('Não foi possível consultar os valores cadastrados. Feche e reabra o agendamento.');})
+      .finally(() => {if(active)setLoadingFees(false);});
+    return () => {active=false;};
+  }, [showAddModal]);
 
   // Form State para Novo Agendamento
   const [newAppt, setNewAppt] = useState({
@@ -77,6 +92,11 @@ const Agenda: React.FC<AgendaProps> = ({
   });
 
   const createId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+  const configuredFee = fees.find(f => f.doctorId === newAppt.doctorId);
+  useEffect(() => {
+    if (configuredFee) setNewAppt(prev => ({...prev, type:'Consulta',serviceValue:String(configuredFee.price),
+      repassRuleType:'percentage',repassRuleValue:String(configuredFee.doctorPercent)}));
+  }, [configuredFee?.doctorId, configuredFee?.version]);
 
   const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
     onUpdateAppointmentStatus(id, status);
@@ -118,8 +138,9 @@ const Agenda: React.FC<AgendaProps> = ({
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [filteredAppointments, selectedDate]);
 
-  const handleCreateAppointment = (e: React.FormEvent) => {
+  const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creating || loadingFees || feeError) return;
     if (!newAppt.patientId || !newAppt.doctorId) {
       alert("Por favor, selecione um paciente e um médico.");
       return;
@@ -151,9 +172,18 @@ const Agenda: React.FC<AgendaProps> = ({
       status: AppointmentStatus.SCHEDULED,
     };
 
-    setAppointments(prev => [createdAppt, ...prev]);
-    setShowAddModal(false);
-    alert("Agendamento realizado com sucesso!");
+    setCreating(true);
+    try {
+      if (configuredFee && createdAppt.type !== 'Consulta') throw Error('O link cadastrado corresponde a consulta. Selecione Consulta.');
+      const outcome = onCreateAppointment ? await onCreateAppointment(createdAppt) : null;
+      if (!onCreateAppointment) setAppointments(prev => [createdAppt, ...prev]);
+      setShowAddModal(false);
+      alert(outcome?.emailSent === false
+        ? `Agendamento salvo. ${outcome.emailError || 'O e-mail não foi enviado; o link está disponível no portal.'}`
+        : 'Agendamento realizado com sucesso!');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'O servidor não confirmou o agendamento.');
+    } finally { setCreating(false); }
   };
 
   const renderWeekView = () => {
@@ -478,6 +508,9 @@ const Agenda: React.FC<AgendaProps> = ({
             </div>
             
             <form onSubmit={handleCreateAppointment} className="p-10 space-y-6">
+              {loadingFees && <p role="status">Consultando valores cadastrados…</p>}
+              {feeError && <p role="alert" className="text-red-700">{feeError}</p>}
+              {configuredFee && <p className="rounded-xl bg-blue-50 p-3 text-sm text-blue-800">Valor e percentual definidos no cadastro do médico: {configuredFee.price.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}, repasse de {configuredFee.doctorPercent}%. O servidor preservará esses valores neste agendamento.</p>}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Paciente *</label>
                 <select 
@@ -567,6 +600,7 @@ const Agenda: React.FC<AgendaProps> = ({
                     step="0.01"
                     className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
                     value={newAppt.serviceValue}
+                    disabled={!!configuredFee}
                     onChange={e => setNewAppt({ ...newAppt, serviceValue: e.target.value })}
                     required
                   />
@@ -577,6 +611,7 @@ const Agenda: React.FC<AgendaProps> = ({
                     <select
                       className="w-1/2 p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
                       value={newAppt.repassRuleType}
+                      disabled={!!configuredFee}
                       onChange={e => setNewAppt({ ...newAppt, repassRuleType: e.target.value as 'percentage' | 'fixed' })}
                     >
                       <option value="percentage">Percentual</option>
@@ -589,6 +624,7 @@ const Agenda: React.FC<AgendaProps> = ({
                       step="0.01"
                       className="w-1/2 p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
                       value={newAppt.repassRuleValue}
+                      disabled={!!configuredFee}
                       onChange={e => setNewAppt({ ...newAppt, repassRuleValue: e.target.value })}
                       required
                     />
@@ -601,7 +637,7 @@ const Agenda: React.FC<AgendaProps> = ({
                 className="w-full py-5 bg-blue-600 text-white rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 active:scale-95 transition-all mt-4 flex items-center justify-center space-x-2"
               >
                 <Save size={18} />
-                <span>Confirmar Agendamento</span>
+                <span>{creating ? 'Salvando…' : 'Confirmar Agendamento'}</span>
               </button>
             </form>
           </div>

@@ -52,7 +52,7 @@ export const OperationalCenter:React.FC<{db:AppDatabase;user:User;onReload:()=>P
    </select>
    <input required placeholder="Nome completo" aria-label="Nome completo" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
    <input type="email" required placeholder="E-mail de acesso" aria-label="E-mail de acesso" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/>
-   <select aria-label="Perfil de acesso" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="doctor">Médico / profissional clínico</option><option value="collaborator">Colaborador</option><option value="admin">Administrador</option></select>
+   <select aria-label="Perfil de acesso" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="doctor">Médico / profissional clínico</option><option value="collaborator">Colaborador</option><option value="secretaria">Secretaria</option><option value="tesouraria">Tesouraria</option><option value="admin">Administrador</option></select>
    {form.role==='doctor'&&!db.users.find(u=>u.id===form.profileId)?.doctorId&&<><input required placeholder="Registro profissional" value={form.crm} onChange={e=>setForm({...form,crm:e.target.value})}/><input required placeholder="Especialidade" value={form.specialty} onChange={e=>setForm({...form,specialty:e.target.value})}/></>}
    <button disabled={busy} className="bg-teal-700 text-white rounded-lg p-3 md:col-span-2">Enviar convite</button>
   </form>
@@ -64,7 +64,7 @@ export const OperationalCenter:React.FC<{db:AppDatabase;user:User;onReload:()=>P
    })}>{(u as any).active===false?'Reativar':'Desativar'}</button>
    <select aria-label={`Perfil de ${u.name}`} disabled={busy} value={u.role} onChange={e=>{const role=e.target.value;void run(async()=>{
     if(!confirm(`Alterar o perfil de ${u.name} para ${role}?`))return;await storage.syncToCloud(db,user.clinicId);await staff({action:'change',id:u.id,active:(u as any).active!==false,role});await onReload();setMessage('Perfil confirmado pelo servidor.');
-   });}}><option value="admin">Administrador</option><option value="doctor">Clínico</option><option value="collaborator">Colaborador</option></select>
+   });}}><option value="admin">Administrador</option><option value="doctor">Clínico</option><option value="collaborator">Colaborador</option><option value="secretaria">Secretaria</option><option value="tesouraria">Tesouraria</option></select>
    {(u as any).authUserId&&<button disabled={busy} className="border rounded px-3 py-2" onClick={()=>void run(async()=>{await staff({action:'recover',id:u.id});setMessage('O provedor aceitou o envio do link para o e-mail autenticado da conta vinculada.');})}>Enviar recuperação</button>}
    <AdminPasswordEditor key={`password-${u.id}`} user={user} kind="staff" targetId={u.id} targetName={u.name} linked={Boolean((u as any).authUserId)&&(u as any).active!==false}/>
   </div>)}</div></>:<>

@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { freshStartEnabled } from '../services/freshStart';
 import {
   Calendar,
   Clock,
@@ -15,15 +14,24 @@ import {
   X,
   Loader2,
   AlertCircle,
-  MapPin
+  MapPin,
+  ExternalLink,
+  Send
 } from 'lucide-react';
 import { Patient, Doctor, Appointment, AppointmentStatus } from '../types';
+import { sendPaymentLink } from '../services/manualPayments';
+
+interface BookingOutcome {
+  emailSent?: boolean;
+  emailError?: string;
+  paymentUrl?: string;
+}
 
 interface PatientPortalProps {
   patient: Patient;
   doctors: Doctor[];
   appointments: Appointment[];
-  onAddAppointment: (appt: Appointment) => Promise<void>;
+  onAddAppointment: (appt: Appointment) => Promise<void | BookingOutcome>;
   onLogout: () => void;
 }
 
@@ -49,6 +57,16 @@ const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string }>
 
 const TIMES = ['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30'];
 
+const safePaymentUrl = (value?: string) => {
+  if (!value) return '';
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : '';
+  } catch {
+    return '';
+  }
+};
+
 const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appointments, onAddAppointment, onLogout }) => {
   const [tab, setTab] = useState<'agenda' | 'agendar'>('agenda');
   const [selectedDoctorId, setSelectedDoctorId] = useState(patient.primaryDoctorId || doctors[0]?.id || '');
@@ -60,6 +78,8 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
   const [loading, setLoading] = useState(false);
   const [bookingError, setBookingError] = useState('');
   const [notifMsg, setNotifMsg] = useState('');
+  const [sendingLinkId, setSendingLinkId] = useState('');
+  const [linkNotice, setLinkNotice] = useState('');
 
   const myAppointments = useMemo(
     () => appointments
@@ -78,12 +98,16 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
   );
 
   const handleBook = async () => {
-    if (!selectedTime || !selectedDoctorId || !selectedDate || loading) return;
+      if (!selectedTime || !selectedDoctorId || !selectedDate || loading) return;
+      if (selectedType === 'Retorno' && Number(selectedDoctor?.consultationPrice) > 0) {
+        setBookingError('O preço publicado para este profissional se aplica somente a consultas. Selecione Consulta para continuar.');
+        return;
+      }
     setLoading(true);
     setBookingError('');
 
     try {
-      const appt: Appointment = {
+      const appt: Appointment & { paymentUrl?: string } = {
         id: `appt-${crypto.randomUUID()}`,
         patientId: patient.id,
         doctorId: selectedDoctorId,
@@ -92,18 +116,21 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
         type: selectedType,
         status: AppointmentStatus.SCHEDULED,
         room: 'A definir',
-        ...(freshStartEnabled ? {} : {
-          serviceValue: selectedType === 'Retorno' ? 180 : 350,
-          repassRule: { type: 'percentage' as const, value: 60 },
-        }),
       };
 
-      await onAddAppointment(appt);
+      const result = await onAddAppointment(appt);
+      if (result?.paymentUrl && safePaymentUrl(result.paymentUrl)) appt.paymentUrl = safePaymentUrl(result.paymentUrl);
 
       const dateFormatted = formatDisplayDate(selectedDate).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+      const price = selectedDoctor?.consultationPrice ?? appt.serviceValue;
+      const priceCopy = typeof price === 'number' && price > 0
+        ? ` Valor informado: ${price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`
+        : '';
+      const emailCopy = result?.emailSent === false
+        ? ` O serviço não aceitou a solicitação do e-mail de confirmação${result.emailError ? `: ${result.emailError}` : '.'}`
+        : result?.emailSent === true ? ' O serviço aceitou a solicitação do e-mail de confirmação; isso não comprova entrega na caixa de entrada.' : '';
       setNotifMsg(
-        `Consulta agendada com ${selectedDoctor?.name} para ${dateFormatted} às ${selectedTime}. ` +
-        `Uma confirmação foi registrada no sistema.`
+        `${selectedType} agendada com ${selectedDoctor?.name} para ${dateFormatted} às ${selectedTime}.${priceCopy}${emailCopy}`
       );
 
       setShowConfirm(false);
@@ -123,6 +150,20 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
   const upcomingCount = myAppointments.filter(a =>
     a.date >= getLocalDateString() && a.status !== AppointmentStatus.CANCELLED && a.status !== AppointmentStatus.FINISHED
   ).length;
+
+  const resendPaymentLink = async (appointmentId: string) => {
+    if (sendingLinkId) return;
+    setSendingLinkId(appointmentId);
+    setLinkNotice('');
+    try {
+      const result = await sendPaymentLink(appointmentId, true);
+      setLinkNotice(result.sent ? 'Solicitação de envio do link concluída.' : result.error || 'Não foi possível reenviar o link.');
+    } catch (error) {
+      setLinkNotice(error instanceof Error ? error.message : 'Não foi possível reenviar o link.');
+    } finally {
+      setSendingLinkId('');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -196,6 +237,7 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
         {/* Tab: Minhas Consultas */}
         {tab === 'agenda' && (
           <div className="space-y-4 animate-in fade-in duration-300">
+            {linkNotice && <div role="status" className="flex items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs font-bold text-blue-800">{linkNotice}<button type="button" onClick={() => setLinkNotice('')} aria-label="Fechar aviso"><X size={15} /></button></div>}
             {myAppointments.length === 0 ? (
               <div className="bg-white rounded-[32px] border border-slate-200 p-12 text-center shadow-sm">
                 <Calendar size={40} className="mx-auto text-slate-200 mb-4" />
@@ -208,6 +250,8 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
             ) : (
               myAppointments.map(appt => {
                 const doc = doctors.find(d => d.id === appt.doctorId);
+                const paymentUrl = safePaymentUrl((appt as Appointment & { paymentUrl?: string }).paymentUrl);
+                const snapshotPrice = appt.serviceValue;
                 const cfg = STATUS_CONFIG[appt.status] || STATUS_CONFIG['Agendado'];
                 const isPast = appt.date < getLocalDateString();
                 return (
@@ -235,8 +279,21 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
                         )}
                       </div>
                     </div>
-                    <div className={`px-3 py-1.5 ${cfg.bg} ${cfg.text} rounded-xl text-[10px] font-black uppercase tracking-widest shrink-0`}>
-                      {cfg.label}
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <div className={`px-3 py-1.5 ${cfg.bg} ${cfg.text} rounded-xl text-[10px] font-black uppercase tracking-widest`}>
+                        {cfg.label}
+                      </div>
+                      {typeof snapshotPrice === 'number' && snapshotPrice > 0 && <span className="text-[11px] font-bold text-slate-500">{snapshotPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>}
+                      {paymentUrl && appt.status !== AppointmentStatus.CANCELLED && (
+                        <div className="flex items-center gap-2">
+                          <a href={paymentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-2 text-[9px] font-black uppercase text-blue-700 hover:bg-blue-100">
+                            <ExternalLink size={12} /> Link de pagamento
+                          </a>
+                          <button type="button" onClick={() => void resendPaymentLink(appt.id)} disabled={!!sendingLinkId} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-2 text-[9px] font-black uppercase text-slate-500 hover:bg-slate-50 disabled:opacity-50" title="Solicitar novo envio do link">
+                            <Send size={12} /> {sendingLinkId === appt.id ? 'Enviando…' : 'Reenviar'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -272,7 +329,11 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
                       <button
                         key={doc.id}
                         type="button"
-                        onClick={() => { setSelectedDoctorId(doc.id); setSelectedTime(''); }}
+                        onClick={() => {
+                          setSelectedDoctorId(doc.id);
+                          setSelectedTime('');
+                          if (Number(doc.consultationPrice) > 0) setSelectedType('Consulta');
+                        }}
                         className={`text-left p-4 rounded-2xl border transition-all ${selectedDoctorId === doc.id ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500/10' : 'border-slate-200 hover:border-blue-200 hover:bg-slate-50'}`}
                       >
                         <p className="font-black text-slate-800 text-sm">{doc.name}</p>
@@ -334,12 +395,15 @@ const PatientPortal: React.FC<PatientPortalProps> = ({ patient, doctors, appoint
                   <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Tipo de Atendimento</h3>
                   <div className="flex space-x-3">
                     {(['Consulta', 'Retorno'] as const).map(type => (
-                      <button key={type} type="button" onClick={() => setSelectedType(type)}
-                        className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${selectedType === type ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-blue-50'}`}>
+                      <button key={type} type="button" disabled={type === 'Retorno' && Number(selectedDoctor?.consultationPrice) > 0} onClick={() => setSelectedType(type)}
+                        className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed disabled:opacity-40 ${selectedType === type ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-blue-50'}`}>
                         {type}
                       </button>
                     ))}
                   </div>
+                  {Number(selectedDoctor?.consultationPrice) > 0 && (
+                    <p className="text-[11px] font-medium text-slate-500">O preço publicado para {selectedDoctor?.name} é válido somente para Consulta. Retornos não estão disponíveis para agendamento pelo portal.</p>
+                  )}
                 </div>
 
                 {/* Resumo + botão */}
