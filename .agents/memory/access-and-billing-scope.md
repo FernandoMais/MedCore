@@ -52,14 +52,16 @@ application or an active webhook. Verify DNS, HTTPS and the actual server
 endpoint before configuration. Payment-webhook failure alerts are intended for
 the clinic's administrative mailbox, separate from the webhook URL.
 
-Consultation prices should be configurable and associated with one or several
+The owner states that consultation prices are predetermined by doctor and
+specialty. Prices should be configurable and associated with one or several
 doctors, showing the professional's repasse and the clinic's administrative
 share. Administrative staff need individual professional and global reports.
 Patients should upload exams/documents into their own file for the attending
 doctor to access at consultation.
 
 **Why:** The owner described this as a unified workflow for service providers,
-patient-submitted records and administrative financial management.
+patient-submitted records and administrative financial management, with
+consultation prices agreed in advance.
 
 **How to apply:** Keep attachments private, restrict each patient to their own
 records and authorize professional access. Keep historical price and repasse
