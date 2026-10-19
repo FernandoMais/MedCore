@@ -81,17 +81,33 @@ export const storage={
  },
  resetCloudSyncState() {epoch++;baseline={};versions={};lastDatabase=null;pendingHeld=false;draftVault.lock();},
  async getPendingChanges(){return draftVault.read(pendingScope);},
- async discardPendingChanges(){pendingHeld=false;await draftVault.remove(pendingScope);},
+  async holdPendingChanges(db:AppDatabase){
+   await storage.save(db);
+   pendingHeld=!!(await draftVault.read(pendingScope))?.changes?.length;
+   return pendingHeld;
+  },
+  async discardPendingChanges(){await draftVault.remove(pendingScope);pendingHeld=false;},
  async recoverPendingChanges(){
+   const generation=epoch,scope=pendingScope;
+   return serial(async()=>{
   const pending=await draftVault.read(pendingScope);
-  if(!pending?.changes?.length)return;
+   if(generation!==epoch)throw Error('A sessão mudou. Entre novamente para revisar as pendências desta conta.');
+   if(!pending?.changes?.length){pendingHeld=false;return;}
   const changes=pending.changes.filter((c:any)=>{
    const current=baseline[c.table]?.get(c.id);
    if(c.row===null)return !!current;
    return !current||!Object.entries(c.row).every(([k,v])=>stable(current[k])===stable(v));
   });
-  if(changes.length)await operationalRpc('operational_sync',{p_changes:changes});
-  pendingHeld=false;await draftVault.remove(pendingScope);
+   if(changes.length){
+    const ack=await operationalRpc('operational_sync',{p_changes:changes});
+    if(generation!==epoch)throw Error('A sessão mudou durante a recuperação. As pendências foram preservadas para revisão.');
+    const complete=Array.isArray(ack)&&ack.length===changes.length&&changes.every((change:any)=>
+     ack.filter((item:any)=>item.table===change.table&&item.id===change.id&&
+      (change.row===null ? item.deleted===true : !item.deleted&&item.row&&rowId(item.row)===change.id&&typeof item.version==='string'&&!!item.version)).length===1);
+    if(!complete)throw Error('O servidor não confirmou todas as pendências. A cópia protegida foi mantida; recarregue para comparar antes de tentar novamente.');
+   }
+   await draftVault.remove(scope);pendingHeld=false;
+   });
  },
  async fetchFromCloud(clinic?:string):Promise<Partial<AppDatabase>> {
   if(!clinic)return {};

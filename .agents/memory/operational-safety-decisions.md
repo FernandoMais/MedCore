@@ -14,6 +14,30 @@ the stale-write rejection promptly, preserving the whole batch.
 deadlocks/serialization. Do not blindly retry stale user intent with a freshly
 read record version; require review.
 
+Reviewing protected pending edits must be read-only. After recovering or
+explicitly discarding a pending batch, read the confirmed server state before
+allowing normal editing and autosync again.
+
+**Why:** Flushing the old screen before comparison blocks the comparison itself
+when pending edits are held. Flushing stale UI data after recovery can also
+resubmit changes that contradict the recovered records.
+
+**How to apply:** Preserve the encrypted copy on conflicts or incomplete server
+acknowledgments. Do not clear it merely because an HTTP request returned. Keep
+new edits suspended during review rather than mixing fresh intent into an older
+protected batch.
+
+Resolve browser-local pending edits at the original address before a custom
+domain cutover.
+
+**Why:** The same Supabase project does not make browser-local encrypted drafts
+available across different origins. A domain change can hide access to a local
+copy without actually deleting it.
+
+**How to apply:** Recover using the same account, browser and address where the
+warning appeared. Do not recommend clearing browser storage or changing domains
+as a remedy for protected pending edits.
+
 Administrative legacy quarantine must use an administrative-only encryption key,
 distinct from clinical and reception draft keys. Preserve unreadable ciphertext;
 never autosave an empty form over a failed draft recovery.
