@@ -51,6 +51,22 @@ test('protected pending edits block writes but allow a read-only comparison with
  assert.equal((await f.storage.getPendingChanges()).changes[0].row.name,'Alteração protegida');
  assert.equal(f.calls.filter(c=>c==='operational_sync').length,0);
 });
+test('review exposes local and confirmed values without changing or submitting protected edits',async()=>{
+ const f=await fixture();
+ const original=structuredClone(f.vault.get('pending-edits-admin'));
+ const items=await f.storage.inspectPendingChanges();
+ assert.equal(items[0].current.name,'Confirmado');
+ assert.equal(items[0].row.name,'Alteração protegida');
+ assert.equal(items[0].conflict,false);
+ assert.equal(items[0].applied,false);
+ assert.deepEqual(f.vault.get('pending-edits-admin'),original);
+ assert.equal(f.calls.filter(c=>c==='operational_sync').length,0);
+ f.vault.get('pending-edits-admin').changes[0].expected='older-version';
+ assert.equal((await f.storage.inspectPendingChanges())[0].conflict,true);
+ f.vault.get('pending-edits-admin').changes[0].row.name='Confirmado';
+ assert.equal((await f.storage.inspectPendingChanges())[0].applied,true);
+ assert.ok((await f.storage.getPendingChanges()).changes.length);
+});
 test('recovery clears the protected copy only after a full server acknowledgment, then reloads without flushing old data',async()=>{
  const f=await fixture();
  await f.storage.recoverPendingChanges();

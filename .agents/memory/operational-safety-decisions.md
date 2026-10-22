@@ -26,6 +26,14 @@ resubmit changes that contradict the recovered records.
 acknowledgments. Do not clear it merely because an HTTP request returned. Keep
 new edits suspended during review rather than mixing fresh intent into an older
 protected batch.
+Present an active review workspace with local versus confirmed values instead
+of showing an entire inert form as if it were usable. Recovery controls must
+remain outside the edit lock and usable on mobile.
+
+**Why:** Administrators interpreted the protected-pending lock as a frozen system
+even though recovery links were present. Removing the write guard would risk
+data loss; making the resolution visible and actionable preserves both safety
+and usability.
 
 Resolve browser-local pending edits at the original address before a custom
 domain cutover.

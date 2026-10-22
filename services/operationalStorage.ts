@@ -81,6 +81,17 @@ export const storage={
  },
  resetCloudSyncState() {epoch++;baseline={};versions={};lastDatabase=null;pendingHeld=false;draftVault.lock();},
  async getPendingChanges(){return draftVault.read(pendingScope);},
+ async inspectPendingChanges(){
+  const generation=epoch;
+  const pending=await draftVault.read(pendingScope);
+  if(generation!==epoch)throw Error('A sessão mudou. Entre novamente para revisar as pendências desta conta.');
+  return (pending?.changes||[]).map((change:any)=>{
+   const current=baseline[change.table]?.get(change.id)||null;
+   const applied=change.row===null ? !!baseline[change.table]&&!current :
+    !!current&&Object.entries(change.row).every(([key,value])=>stable(current[key])===stable(value));
+   return {...change,current,applied,conflict:!applied&&(versions[change.table]?.[change.id]||null)!==(change.expected||null)};
+  });
+ },
   async holdPendingChanges(db:AppDatabase){
    await storage.save(db);
    pendingHeld=!!(await draftVault.read(pendingScope))?.changes?.length;

@@ -27,6 +27,7 @@ async function openPendingSession(page){
  fetchFromCloud:async clinic=>{if(!clinic)return {};f.calls.push('snapshot');return empty();},
  syncToCloud:async()=>{f.calls.push('sync');if(f.held)throw Error('Há pendências protegidas da sessão anterior.');},
  getPendingChanges:async()=>f.held?{changes:[{table:'doctors',id:'fixture-doctor',row:{name:'Alteração fictícia'}}]}:null,
+ inspectPendingChanges:async()=>f.held?[{table:'doctors',id:'fixture-doctor',row:{name:'Alteração fictícia',apiKey:'synthetic-sensitive-value'},current:{name:'Confirmado'},applied:false,conflict:f.conflict}]:[],
  holdPendingChanges:async()=>{f.calls.push('hold');return f.held;},
  recoverPendingChanges:async()=>{f.calls.push('recover');if(f.conflict)throw Error('Conflito de gravação: outro acesso alterou o registro. Suas alterações não foram enviadas.');f.held=false;},
  discardPendingChanges:async()=>{f.calls.push('discard');f.held=false;}
@@ -35,7 +36,7 @@ async function openPendingSession(page){
  await page.goto('/');
  await page.getByRole('button',{name:/Acesso Profissional/i}).click();
  await page.getByRole('button',{name:'Entrar na sessão fictícia'}).click();
- await expect(page.getByText('Revisão de pendências',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Revisão de alterações protegidas'})).toBeVisible();
 }
 test('comparison only reads the cloud; recovery reloads without flushing the old screen and unlocks editing',async({page})=>{
  await openPendingSession(page);
@@ -50,6 +51,24 @@ test('comparison only reads the cloud; recovery reloads without flushing the old
  expect(calls.filter(call=>call!=='sync')).toEqual(['snapshot','hold','snapshot','recover','snapshot','edit']);
  // Normal autosync may resume after the confirmed snapshot, never before it.
  if(calls.includes('sync'))expect(calls.indexOf('sync')).toBeGreaterThan(calls.lastIndexOf('snapshot'));
+});
+test('mobile review shows actual local versus confirmed values and keeps recovery buttons clickable',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await openPendingSession(page);
+ await expect(page.getByRole('heading',{name:'Revisão de alterações protegidas'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Editar registro fictício'})).toBeHidden();
+ const recover=page.getByRole('button',{name:'Recuperar pendências protegidas desta conta'});
+ expect(await recover.evaluate(el=>!!el.closest('[inert]'))).toBe(false);
+ await page.getByText('Médicos — Confirmado',{exact:false}).click();
+ await expect(page.getByRole('cell',{name:'Alteração fictícia',exact:true})).toBeVisible();
+ await expect(page.getByRole('cell',{name:'Confirmado',exact:true})).toBeVisible();
+ await expect(page.getByText('synthetic-sensitive-value',{exact:true})).toHaveCount(0);
+ await expect(page.getByRole('cell',{name:'Conteúdo protegido',exact:true})).toHaveCount(2);
+ await expect(page.getByRole('cell',{name:'Conteúdo protegido',exact:true}).first()).toBeVisible();
+ expect(await page.evaluate(()=>window.pendingFixture.calls.includes('sync'))).toBe(false);
+ await recover.click();
+ await expect(page.getByRole('heading',{name:'Revisão de alterações protegidas'})).toHaveCount(0);
+ await page.getByRole('button',{name:'Editar registro fictício'}).click();
 });
 test('a recovery conflict keeps the copy and editing lock instead of silently discarding or retrying',async({page})=>{
  await openPendingSession(page);

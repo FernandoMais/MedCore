@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import ConsultationBoundary from './components/ConsultationBoundary';
+import PendingChangesReview, { type PendingReviewItem } from './components/PendingChangesReview';
 import { 
   Users, 
   Calendar, 
@@ -75,6 +76,7 @@ const App: React.FC = () => {
   const [cloudStatus, setCloudStatus] = useState<'connected' | 'offline' | 'pending'>('offline');
   const [cloudReady, setCloudReady] = useState(false);
   const [pendingReview, setPendingReview] = useState(false);
+  const [pendingItems,setPendingItems]=useState<PendingReviewItem[]>([]);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [recordSaving,setRecordSaving]=useState(false);
   const recordSavingRef=React.useRef(false);
@@ -164,6 +166,7 @@ const App: React.FC = () => {
       const cloudData = await storage.fetchFromCloud(user.clinicId);
       setDb(prev => ({ ...prev, ...cloudData }));
       const pending=await storage.getPendingChanges();
+      setPendingItems(pending?.changes?.length?await storage.inspectPendingChanges():[]);
       setPendingReview(!!pending?.changes?.length);
       if(pending?.changes?.length)setSyncError('Há alterações criptografadas não confirmadas da sua sessão anterior. Revise ou recupere essas pendências antes de continuar.');
       setCloudReady(true);
@@ -184,6 +187,7 @@ const App: React.FC = () => {
     import('./services/auth').then(m => m.logoutUser()).catch(() => {});
     setCurrentUser(null);
     setPendingReview(false);
+    setPendingItems([]);
     setCloudReady(false);
     storage.resetCloudSyncState();
     setDb(storage.initLocal());
@@ -215,6 +219,7 @@ const App: React.FC = () => {
     if(me&&(me.role!==currentUser.role||(me as any).active===false))handleLogout();
     const pending=await storage.getPendingChanges();
     const held=!!pending?.changes?.length;
+    setPendingItems(held?await storage.inspectPendingChanges():[]);
     setPendingReview(held);
     setCloudStatus(held?'pending':'connected');
     setSyncError(held?'Os dados confirmados foram recarregados. Suas alterações protegidas continuam preservadas; recupere-as ou descarte somente após revisão.':'');
@@ -648,13 +653,16 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 bg-slate-50/50">
           {syncError&&<div role="alert" className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
             <p>{syncError} Não feche esta tela enquanto houver alterações não confirmadas.</p>
-            <button disabled={reviewBusy} className="mt-2 mr-4 underline font-semibold" onClick={()=>void reviewPendingChanges('recover')}>Recuperar pendências protegidas desta conta</button>
-            <button disabled={reviewBusy} className="mt-2 mr-4 underline" onClick={()=>void reviewPendingChanges('discard')}>Descartar pendências locais após revisão</button>
-            <button disabled={reviewBusy} className="mt-2 underline font-semibold" onClick={()=>void reviewPendingChanges('compare')}>Recarregar para comparar com os dados confirmados</button>
+            <div className="mt-3 flex flex-wrap gap-3">
+            <button disabled={reviewBusy} className="rounded-lg bg-teal-700 px-4 py-3 text-white font-semibold disabled:opacity-50" onClick={()=>void reviewPendingChanges('recover')}>Recuperar pendências protegidas desta conta</button>
+            <button disabled={reviewBusy} className="rounded-lg border border-slate-400 bg-white px-4 py-3 disabled:opacity-50" onClick={()=>void reviewPendingChanges('compare')}>Recarregar para comparar com os dados confirmados</button>
+            <button disabled={reviewBusy} className="rounded-lg border border-red-300 bg-white px-4 py-3 text-red-800 disabled:opacity-50" onClick={()=>void reviewPendingChanges('discard')}>Descartar pendências locais após revisão</button>
+            </div>
             {reviewBusy&&<p role="status" className="mt-2">Conferindo as pendências. Aguarde a confirmação…</p>}
           </div>}
+          {pendingReview&&<PendingChangesReview items={pendingItems}/>}
           {recordSaving&&<p role="status" className="mb-4 text-blue-800">Confirmando o cadastro médico no servidor. Aguarde…</p>}
-          <div inert={pendingReview||recordSaving} aria-disabled={pendingReview||recordSaving||undefined}>
+          <div hidden={pendingReview} inert={pendingReview||recordSaving} aria-disabled={pendingReview||recordSaving||undefined}>
           {currentView === 'dashboard' && <Dashboard patientsCount={filteredPatients.length} appointments={filteredAppointments} doctorsCount={(db.doctors || []).length} />}
           {currentView === 'agenda' && (
             <Agenda 
