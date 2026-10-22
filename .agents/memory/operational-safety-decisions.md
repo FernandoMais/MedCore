@@ -49,6 +49,13 @@ the former administrator's ordinary draft key.
 **How to apply:** Validate the caller's current role when releasing encryption
 keys. Separate account and role namespaces; clear memory on logout. Treat old
 downloads and previously delivered plaintext as historical copies requiring review.
+Nonclinical financial staff must be able to protect administrative pending
+edits without requesting clinical encryption keys. Do not expand server-side
+clinical permissions just to make a newly introduced staff profile log in.
+
+**Why:** Permission to manage finances is not permission to decrypt clinical
+drafts. Reusing clinical-key initialization for nonclinical roles can block
+otherwise valid logins and make pending-edit protection fail.
 
 Application data recovery is not a complete provider/disaster-recovery backup.
 

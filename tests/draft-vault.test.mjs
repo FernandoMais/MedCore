@@ -8,7 +8,7 @@ let actor={id:'synthetic-a',role:'doctor'};
 globalThis.vaultTestSdk={
  auth:{getUser:async()=>({data:{user:{id:actor.id}},error:null})},
  rpc:async(name)=>{
-  if((name.includes('admin')&&actor.role!=='admin')||(name==='operational_vault_key'&&actor.role==='collaborator'))return {error:{code:'42501'}};
+  if((name.includes('admin')&&actor.role!=='admin')||(name==='operational_vault_key'&&['collaborator','secretaria','tesouraria'].includes(actor.role)))return {error:{code:'42501'}};
   const digit=actor.id.endsWith('a')?(name.includes('admin')?'3':name.includes('general')?'4':'1'):'2';
   return {data:digit.repeat(64),error:null};
  },
@@ -37,3 +37,13 @@ test('administrative quarantine and clinical drafts are not unlocked after a rol
  await draftVault.write('pending-edits-collaborator',{changes:[]});
  assert.deepEqual(await draftVault.read('pending-edits-collaborator'),{changes:[]});
 });
+for(const role of ['secretaria','tesouraria']){
+ test(`${role} protects its pending edits without requesting a clinical key`,async()=>{
+  actor={id:'synthetic-a',role};await draftVault.unlock(role);
+  const scope=`pending-edits-${role}`;
+  await draftVault.write(scope,{changes:[{table:'doctors',id:'ficticio',row:{phone:'0000'}}]});
+  assert.equal((await draftVault.read(scope)).changes[0].row.phone,'0000');
+  await assert.rejects(draftVault.read('consultation'),/fechado/);
+  await assert.rejects(draftVault.read('legacy-drafts'),/fechado/);
+ });
+}

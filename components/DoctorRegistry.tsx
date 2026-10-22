@@ -33,17 +33,21 @@ interface DoctorRegistryProps {
   users: User[];
   clinicId: string;
   providersOnly?: boolean;
+  onSaveDoctor?: (doctor:Doctor)=>Promise<void>;
   setDoctors: React.Dispatch<React.SetStateAction<Doctor[]>>;
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
 }
 
 const DAYS_OF_WEEK = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicId, setDoctors, setUsers, providersOnly=false }) => {
+const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicId, setDoctors, setUsers, providersOnly=false, onSaveDoctor }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [savingDoctor,setSavingDoctor]=useState(false);
+  const [doctorSaveError,setDoctorSaveError]=useState('');
+  const [doctorSaveNotice,setDoctorSaveNotice]=useState('');
 
   // Doctor being viewed/edited
   const selectedDoctor = doctors.find(d => d.id === selectedDoctorId) || null;
@@ -166,6 +170,7 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicI
   // ============================================================
 
   const startEditing = () => {
+    setDoctorSaveError('');setDoctorSaveNotice('');
     if (selectedDoctor) {
       setEditFormData({ ...selectedDoctor });
       const linkedUser = users.find(u => u.doctorId === selectedDoctor.id);
@@ -174,16 +179,27 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicI
     }
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
+    if(savingDoctor)return;
     if (editFormData) {
+      setDoctorSaveError('');setSavingDoctor(true);
+      try{
+      if(providersOnly){
+        if(!onSaveDoctor)throw Error('A gravação confirmada não está disponível. Não feche a edição.');
+        await onSaveDoctor(editFormData);
+      }else{
       setDoctors(prev => prev.map(d => d.id === editFormData.id ? editFormData : d));
       
       if (editUserFormData) {
         setUsers(prev => prev.map(u => u.id === editUserFormData.id ? editUserFormData : u));
       }
+      }
       
       setIsEditing(false);
-      alert(providersOnly?"Alterações de agenda aguardam confirmação na sincronização do servidor.":"Perfil e credenciais atualizados!");
+      setDoctorSaveNotice(providersOnly?'Cadastro médico confirmado no Supabase.':'Perfil atualizado.');
+      }catch(error){
+        setDoctorSaveError(error instanceof Error?error.message:'Não foi possível confirmar a gravação. Os campos foram mantidos para revisão.');
+      }finally{setSavingDoctor(false);}
     }
   };
 
@@ -441,7 +457,10 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicI
         {/* Detail/Edit Panel */}
         {selectedDoctor && (
           <div className="lg:col-span-8 animate-in slide-in-from-right-8 duration-500">
-            <div className="bg-white border border-slate-200 rounded-[40px] shadow-2xl overflow-hidden flex flex-col h-full sticky top-8">
+            {doctorSaveError&&<p role="alert" className="mb-4 rounded-xl bg-amber-50 p-4 text-amber-900">{doctorSaveError}</p>}
+            {doctorSaveNotice&&<p role="status" className="mb-4 rounded-xl bg-emerald-50 p-4 text-emerald-900">{doctorSaveNotice}</p>}
+            {savingDoctor&&<p role="status" className="mb-4">Confirmando o cadastro no servidor…</p>}
+            <div inert={savingDoctor} className="bg-white border border-slate-200 rounded-[40px] shadow-2xl overflow-hidden flex flex-col h-full sticky top-8">
               {/* Header */}
               <div className="p-10 border-b border-slate-100 bg-slate-50/50 relative">
                 <button 

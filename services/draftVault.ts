@@ -5,10 +5,13 @@ let adminKey:CryptoKey|null=null;
 let generalKey:CryptoKey|null=null;
 let owner='';
 let sequence:Promise<unknown>=Promise.resolve();
+const nonClinicalRoles=['collaborator','secretaria','tesouraria'];
+const usesGeneralKey=(scope:string)=>nonClinicalRoles.some(role=>scope===`pending-edits-${role}`);
 const b64=(bytes:Uint8Array)=>btoa(Array.from(bytes,b=>String.fromCharCode(b)).join(''));
 const bytes=(text:string)=>Uint8Array.from(atob(text),c=>c.charCodeAt(0));
 export const draftVault={
  async unlock(role='doctor') {
+  draftVault.lock();
   const user=await supabase.auth.getUser();
   if(!user.data?.user?.id)throw Error('Autentique-se para proteger os rascunhos.');
   const load=async(name:string)=>{
@@ -17,13 +20,13 @@ export const draftVault={
    return crypto.subtle.importKey('raw',Uint8Array.from(response.data.match(/../g).map((s:string)=>parseInt(s,16))),{name:'AES-GCM'},false,['encrypt','decrypt']);
   };
   generalKey=await load('operational_general_vault_key');
-  key=role==='collaborator'?null:await load('operational_vault_key');
+  key=nonClinicalRoles.includes(role)?null:await load('operational_vault_key');
   adminKey=role==='admin'?await load('operational_admin_vault_key'):null;
   owner=user.data.user.id;
  },
  lock(){key=null;adminKey=null;generalKey=null;owner='';},
  write(scope:string,value:any):Promise<void> {
-  const activeKey=scope.startsWith('legacy-')||scope==='pending-edits-admin'?adminKey:scope==='pending-edits-collaborator'?generalKey:key,activeOwner=owner;
+  const activeKey=scope.startsWith('legacy-')||scope==='pending-edits-admin'?adminKey:usesGeneralKey(scope)?generalKey:key,activeOwner=owner;
   if(!activeKey)return Promise.reject(Error('Cofre fechado: rascunho ainda não foi protegido.'));
   const task=sequence.catch(()=>{}).then(async()=>{
    const iv=crypto.getRandomValues(new Uint8Array(12));
@@ -33,7 +36,7 @@ export const draftVault={
   sequence=task;return task;
  },
  async read(scope:string) {
-  const activeKey=scope.startsWith('legacy-')||scope==='pending-edits-admin'?adminKey:scope==='pending-edits-collaborator'?generalKey:key;
+  const activeKey=scope.startsWith('legacy-')||scope==='pending-edits-admin'?adminKey:usesGeneralKey(scope)?generalKey:key;
   if(!activeKey)throw Error('Cofre fechado.');
   const text=localStorage.getItem(prefix+owner+':'+scope);if(!text)return null;
   const packet=JSON.parse(text);

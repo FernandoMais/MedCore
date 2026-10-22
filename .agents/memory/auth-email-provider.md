@@ -65,6 +65,18 @@ defaults to a ten-minute template lifetime; accepted sends followed after reload
 allow a cache reload, and verify a native send before claiming completion.
 Configuration persistence alone does not prove the mailer is using the new body.
 
+Verify password recovery in the actual browser for supported staff profiles,
+not only through native Auth calls.
+
+**Why:** A valid native recovery token and successful password update can coexist
+with a frontend rejecting an authorized staff profile. An email arriving does
+not prove that the callback, profile authorization and subsequent login work.
+
+**How to apply:** Distinguish expired/consumed credentials from session,
+connectivity and clinic/profile authorization failures. Test saving a new
+password and signing in afterward with synthetic accounts; do not diagnose all
+callback failures as expired links.
+
 Check inherited native mail quotas when enabling custom SMTP.
 
 **Why:** The default-provider hourly limit remained in place after custom SMTP was

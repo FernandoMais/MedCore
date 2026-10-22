@@ -9,29 +9,38 @@ export default function StaffPasswordReset({ onBack }: { onBack: () => void }) {
   const [message, setMessage] = useState('Validando o acesso para redefinir a senha...');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const verification = useRef<Promise<boolean> | null>(null);
+  const verification = useRef<Promise<{valid:boolean;message?:string}> | null>(null);
   useEffect(() => {
     let active = true;
     const verify = async () => {
       try {
-        if (!isSupabaseConfigured) throw new Error();
+        if (!isSupabaseConfigured) throw new Error('A conexão segura não está configurada neste endereço. Abra o aplicativo publicado.');
         const params = new URLSearchParams(window.location.search);
+        const hash = new URLSearchParams(window.location.hash.slice(1));
+        if(params.has('error')||hash.has('error'))throw new Error('O link expirou ou já foi utilizado. Solicite outro e abra somente o e-mail mais recente.');
         const token = params.get('token_hash');
         if (token) {
           const result = await supabase.auth.verifyOtp({
             token_hash: token, type: params.get('type') === 'invite' ? 'invite' : 'recovery',
           });
-          if (result.error) throw new Error();
+          if (result.error) throw new Error(result.error.status===429
+            ?'Muitas tentativas de validação. Aguarde antes de solicitar outro link.'
+            :['otp_expired','otp_disabled'].includes((result.error as {code?:string}).code||'')
+              ?'O link expirou ou já foi utilizado. Solicite outro e abra somente o e-mail mais recente.'
+              :'Não foi possível validar o link. Se acabou de recebê-lo, verifique sua conexão; caso contrário, solicite um novo link.');
         }
+        // Native Supabase links initialize a session from the URL asynchronously.
+        await supabase.auth.getSession();
         const auth = await supabase.auth.getUser();
-        if (auth.error || !auth.data.user) throw new Error();
-        const profile = await supabase.from('users').select('role,clinicId')
+        if (auth.error || !auth.data.user) throw new Error('Não foi possível abrir a sessão de recuperação. Solicite um novo link e use o e-mail mais recente.');
+        const profile = await supabase.from('users').select('role,clinicId,active')
           .eq('authUserId', auth.data.user.id).maybeSingle();
-        if (profile.error || profile.data?.clinicId !== freshClinicId
-          || !['admin', 'doctor', 'collaborator'].includes(profile.data?.role)) throw new Error();
-        return true;
-      } catch {
-        return false;
+        if(profile.error)throw new Error('O link foi validado, mas não foi possível consultar a autorização da equipe. Verifique a conexão antes de tentar novamente.');
+        if (profile.data?.clinicId !== freshClinicId || profile.data?.active!==true
+          || !['admin', 'doctor', 'collaborator','secretaria','tesouraria'].includes(profile.data?.role)) throw new Error('Esta conta não possui acesso ativo à equipe desta clínica. Peça ao administrador para verificar o cadastro; pacientes devem usar a recuperação da área do paciente.');
+        return {valid:true};
+      } catch(error) {
+        return {valid:false,message:error instanceof Error?error.message:'Não foi possível verificar este acesso. Tente novamente.'};
       } finally {
         // Do not leave one-time recovery credentials in the address bar.
         window.history.replaceState(null, '', window.location.pathname);
@@ -39,12 +48,12 @@ export default function StaffPasswordReset({ onBack }: { onBack: () => void }) {
     };
     // React StrictMode repeats effects; a one-time recovery token must be verified once.
     verification.current ??= verify();
-    verification.current.then(valid => {
+    verification.current.then(result => {
       if (!active) return;
-      setReady(valid);
-      setMessage(valid
+      setReady(result.valid);
+      setMessage(result.valid
         ? 'Escolha uma nova senha exclusiva para o aplicativo.'
-        : 'O link está inválido, expirou ou não pertence à equipe desta clínica.');
+        : result.message||'Não foi possível verificar este acesso.');
     });
     return () => { active = false; };
   }, []);

@@ -93,6 +93,11 @@ export const storage={
   const pending=await draftVault.read(pendingScope);
    if(generation!==epoch)throw Error('A sessão mudou. Entre novamente para revisar as pendências desta conta.');
    if(!pending?.changes?.length){pendingHeld=false;return;}
+   // Compare with a new confirmed read, not a baseline left open for hours.
+   // Original expected versions stay unchanged: this is NOT a stale-write rebase.
+   const snapshot=await operationalRpc('operational_snapshot');
+   if(generation!==epoch)throw Error('A sessão mudou. As pendências foram preservadas.');
+   capture(deserialize(snapshot),snapshot);
   const changes=pending.changes.filter((c:any)=>{
    const current=baseline[c.table]?.get(c.id);
    if(c.row===null)return !!current;

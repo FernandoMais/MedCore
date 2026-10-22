@@ -76,6 +76,9 @@ const App: React.FC = () => {
   const [cloudReady, setCloudReady] = useState(false);
   const [pendingReview, setPendingReview] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false);
+  const [recordSaving,setRecordSaving]=useState(false);
+  const recordSavingRef=React.useRef(false);
+  const accountEpoch=React.useRef(0);
   const [isLoading, setIsLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [showSelfRegister, setShowSelfRegister] = useState(false);
@@ -125,11 +128,11 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if(pendingReview)return;
+    if(pendingReview||recordSaving)return;
     void storage.save(db).catch(()=>setSyncError('As pendências não puderam ser protegidas neste navegador. Aguarde uma gravação confirmada antes de sair.'));
     if (currentUser && cloudReady) setCloudStatus('pending');
     const cloudSync = async () => {
-      if (currentUser && cloudReady) {
+      if (currentUser && cloudReady && !recordSavingRef.current) {
         setIsSyncing(true);
         try {
           await storage.syncToCloud(db, currentUser.clinicId);
@@ -145,9 +148,10 @@ const App: React.FC = () => {
     };
     const timer = setTimeout(cloudSync, 3000);
     return () => clearTimeout(timer);
-  }, [db, currentUser, cloudReady, pendingReview]);
+  }, [db, currentUser, cloudReady, pendingReview,recordSaving]);
 
   const handleLogin = async (user: User) => {
+    accountEpoch.current++;recordSavingRef.current=false;setRecordSaving(false);
     setIsLoading(true);
     setCloudReady(false);
     setPendingReview(false);
@@ -176,6 +180,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    accountEpoch.current++;recordSavingRef.current=false;setRecordSaving(false);
     import('./services/auth').then(m => m.logoutUser()).catch(() => {});
     setCurrentUser(null);
     setPendingReview(false);
@@ -216,7 +221,7 @@ const App: React.FC = () => {
   };
 
   const reviewPendingChanges=async(action:'recover'|'discard'|'compare')=>{
-    if(reviewBusy)return;
+    if(reviewBusy||recordSavingRef.current)return;
     if(action==='discard'&&!confirm('Descartar somente as alterações locais não confirmadas desta conta? Esta ação não pode ser desfeita. Nenhum registro do servidor será apagado.'))return;
     setReviewBusy(true);setPendingReview(true);
     try{
@@ -228,6 +233,36 @@ const App: React.FC = () => {
     }catch(error){
       setSyncError(error instanceof Error?error.message:'Não foi possível concluir a revisão. Não descarte as pendências.');
     }finally{setReviewBusy(false);}
+  };
+
+  const saveDoctorRecord=async(doctor:Doctor)=>{
+    if(!currentUser||pendingReview)throw Error('Resolva as pendências protegidas antes de alterar o cadastro médico.');
+    if(recordSavingRef.current)throw Error('Aguarde a confirmação da gravação em andamento.');
+    if(!db.doctors.some(item=>item.id===doctor.id))throw Error('O cadastro não está na leitura atual. Recarregue para comparar.');
+    const generation=accountEpoch.current;
+    recordSavingRef.current=true;setRecordSaving(true);
+    const next={...db,doctors:db.doctors.map(item=>item.id===doctor.id?doctor:item)};
+    setDb(next);
+    try{
+      await storage.save(next);
+      if(generation!==accountEpoch.current)throw Error('A sessão mudou durante a gravação.');
+      await storage.syncToCloud(next,currentUser.clinicId);
+      if(generation!==accountEpoch.current)throw Error('A sessão mudou durante a gravação.');
+      const fresh=await storage.fetchFromCloud(currentUser.clinicId);
+      if(generation!==accountEpoch.current)throw Error('A sessão mudou durante a gravação.');
+      setDb(prev=>({...prev,...fresh}));setSyncError('');setCloudStatus('connected');
+    }catch(error){
+      if(generation!==accountEpoch.current)throw Error('A sessão mudou. Entre na conta original para conferir a gravação.');
+      let protectedCopy=false;
+      try{protectedCopy=await storage.holdPendingChanges(next);}catch{/* Do not claim protection when the vault failed. */}
+      setPendingReview(protectedCopy);
+      const message=error instanceof Error?error.message:'O servidor não confirmou o cadastro médico.';
+      setSyncError(message+(protectedCopy?' As alterações estão protegidas para revisão.':' Não feche a edição: não foi possível confirmar a proteção local.'));
+      setCloudStatus('offline');
+      throw new Error(message);
+    }finally{
+      if(generation===accountEpoch.current){recordSavingRef.current=false;setRecordSaving(false);}
+    }
   };
 
   if (showPatientRecovery) {
@@ -618,7 +653,8 @@ const App: React.FC = () => {
             <button disabled={reviewBusy} className="mt-2 underline font-semibold" onClick={()=>void reviewPendingChanges('compare')}>Recarregar para comparar com os dados confirmados</button>
             {reviewBusy&&<p role="status" className="mt-2">Conferindo as pendências. Aguarde a confirmação…</p>}
           </div>}
-          <div inert={pendingReview} aria-disabled={pendingReview||undefined}>
+          {recordSaving&&<p role="status" className="mb-4 text-blue-800">Confirmando o cadastro médico no servidor. Aguarde…</p>}
+          <div inert={pendingReview||recordSaving} aria-disabled={pendingReview||recordSaving||undefined}>
           {currentView === 'dashboard' && <Dashboard patientsCount={filteredPatients.length} appointments={filteredAppointments} doctorsCount={(db.doctors || []).length} />}
           {currentView === 'agenda' && (
             <Agenda 
@@ -700,7 +736,7 @@ const App: React.FC = () => {
           {currentView === 'doctors' && financeManager && (
             <div className="space-y-8">
             {currentUser.role===UserRole.ADMIN && <OperationalCenter db={db} user={currentUser} onReload={reloadOperationalData} team/>}
-            <DoctorRegistry providersOnly
+            <DoctorRegistry providersOnly onSaveDoctor={saveDoctorRecord}
               doctors={db.doctors || []} 
               users={[]}
               clinicId={currentUser.clinicId}
