@@ -40,6 +40,14 @@ interface PatientManagerProps {
 
 const inputCls = 'w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-800 placeholder:text-slate-300 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all';
 
+// Keep the component identity stable while the parent updates formData.
+const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode }> = ({ label, required, children }) => (
+  <label className="block space-y-1.5">
+    <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}{required && <span className="text-blue-500 ml-0.5">*</span>}</span>
+    {children}
+  </label>
+);
+
 type PatientAuthMetadata = Patient & { authUserId?: string; pendingAuthUserId?: string; clinicId?: string };
 
 const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, doctors, isAdmin, currentUser, sigilousNotes = [], onBackHome }) => {
@@ -254,13 +262,6 @@ const PatientManager: React.FC<PatientManagerProps> = ({ patients, setPatients, 
   const patientSigilousNotes = sigilousNotes
     .filter(note => note.patientId === selectedPatient?.id)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode }> = ({ label, required, children }) => (
-    <div className="space-y-1.5">
-      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}{required && <span className="text-blue-500 ml-0.5">*</span>}</label>
-      {children}
-    </div>
-  );
 
   const patientFormFields = (
     <div className="space-y-4">
