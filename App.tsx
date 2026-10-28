@@ -744,9 +744,9 @@ const App: React.FC = () => {
           {currentView === 'doctors' && financeManager && (
             <div className="space-y-8">
             {currentUser.role===UserRole.ADMIN && <OperationalCenter db={db} user={currentUser} onReload={reloadOperationalData} team/>}
-            <DoctorRegistry providersOnly onSaveDoctor={saveDoctorRecord}
+            <DoctorRegistry providersOnly currentUser={currentUser} onSaveDoctor={saveDoctorRecord}
               doctors={db.doctors || []} 
-              users={[]}
+              users={currentUser.role===UserRole.ADMIN?(db.users||[]):[]}
               clinicId={currentUser.clinicId}
               setDoctors={(newD) => setDb(prev => {
                 const doctorsList = prev.doctors || [];

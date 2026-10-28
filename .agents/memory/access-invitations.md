@@ -24,4 +24,6 @@ and usable only by administrators.
 clinic, require confirmation of the administrator's current credential, and
 keep secrets out of profiles, backups and audit records. Do not implicitly
 confirm an email, reactivate a disabled account or change its identity binding.
-Keep staff email login and patient CPF login unchanged.
+Keep staff email login and patient CPF login unchanged. Keep email-based
+password recovery available alongside direct administrative changes; the owner
+explicitly requested an additional option, not replacement of the existing flow.

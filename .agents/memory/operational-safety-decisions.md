@@ -94,3 +94,14 @@ newer session checks even while all SQL statements succeed.
 
 **How to apply:** Apply dependent hardening in the same transaction as the baseline
 installer. Keep regression checks for previously revoked sessions after reruns.
+
+Synthetic security checks must respect immutable audit retention.
+
+**Why:** Cleanup can report a failure because audit deletion was rejected even
+when all tagged test accounts, profiles and professional records were removed.
+That does not justify weakening the audit controls.
+
+**How to apply:** Delete only the synthetic application and Auth records, verify
+that those records are gone, and retain the sanitized audit evidence. Do not
+disable append-only protections or treat retained audit events as active test
+accounts.

@@ -27,12 +27,14 @@ import {
 import { Doctor, DoctorSchedule, User, UserRole } from '../types';
 import { provisionAuthAccount } from '../services/auth';
 import DoctorFeeProfile from './DoctorFeeProfile';
+import { AdminPasswordEditor } from './AdminPasswordEditor';
 
 interface DoctorRegistryProps {
   doctors: Doctor[];
   users: User[];
   clinicId: string;
   providersOnly?: boolean;
+  currentUser?: User;
   onSaveDoctor?: (doctor:Doctor)=>Promise<void>;
   setDoctors: React.Dispatch<React.SetStateAction<Doctor[]>>;
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
@@ -40,7 +42,7 @@ interface DoctorRegistryProps {
 
 const DAYS_OF_WEEK = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicId, setDoctors, setUsers, providersOnly=false, onSaveDoctor }) => {
+const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicId, setDoctors, setUsers, providersOnly=false, onSaveDoctor, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -51,6 +53,8 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicI
 
   // Doctor being viewed/edited
   const selectedDoctor = doctors.find(d => d.id === selectedDoctorId) || null;
+  const linkedAccounts=selectedDoctor?users.filter(user=>user.doctorId===selectedDoctor.id&&user.clinicId===clinicId):[];
+  const selectedAccount=linkedAccounts.length===1?linkedAccounts[0]:null;
 
   // Edit State
   const [editFormData, setEditFormData] = useState<Doctor | null>(null);
@@ -552,8 +556,26 @@ const DoctorRegistry: React.FC<DoctorRegistryProps> = ({ doctors, users, clinicI
 
                 {!isEditing && <DoctorFeeProfile doctor={selectedDoctor} />}
 
+                {currentUser?.role===UserRole.ADMIN&&currentUser.clinicId===clinicId&&(
+                  <section className="space-y-3 rounded-2xl border border-slate-200 p-4" aria-label="Senha de acesso do profissional">
+                    <h3 className="font-bold text-slate-800">Senha de acesso do profissional</h3>
+                    <p className="text-sm text-slate-600">Defina uma nova senha sem solicitar um e-mail ao profissional. A recuperação por e-mail continua disponível em Acesso da equipe.</p>
+                    {linkedAccounts.length>1?
+                      <p role="alert" className="text-sm text-amber-800">Há mais de uma conta vinculada a este profissional. Revise os vínculos em Acesso da equipe antes de alterar a senha.</p>:
+                      !selectedAccount?.authUserId?
+                      <p className="text-sm text-slate-600">Este profissional ainda não tem uma conta autenticada vinculada. Use Acesso da equipe para vincular o cadastro e enviar o convite; não será criada uma senha local.</p>:
+                      (selectedAccount as User&{active?:boolean}).active===false?
+                      <p className="text-sm text-amber-800">A conta deste profissional está desativada. Revise o acesso em Acesso da equipe. A troca de senha não reativa uma conta desativada.</p>:
+                      <div>
+                        <p className="mb-2 text-sm text-slate-600">Conta vinculada: {selectedAccount.username}</p>
+                        <AdminPasswordEditor key={`staff-password-${selectedDoctor.id}-${selectedAccount.id}`} user={currentUser} kind="staff"
+                          targetId={selectedAccount.id} targetName={selectedDoctor.name} linked={true}/>
+                      </div>}
+                  </section>
+                )}
+
                 {/* Acesso e Credenciais (Username, Senha, Perfil) */}
-                {isEditing && editUserFormData && (
+                {!providersOnly && isEditing && editUserFormData && (
                   <div className="space-y-6 animate-in fade-in slide-in-from-top-4">
                     <div className="flex items-center space-x-3 mb-2">
                       <Key className="text-blue-600" size={20} />
