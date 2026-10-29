@@ -9,11 +9,17 @@ import {AdminPasswordEditor} from './AdminPasswordEditor';
 export const OperationalCenter:React.FC<{db:AppDatabase;user:User;onReload:()=>Promise<void>;team?:boolean}>=({db,user,onReload,team})=>{
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[password,setPassword]=useState('');
  const [loaded,setLoaded]=useState<any>(null),[proof,setProof]=useState<any>(null),[audit,setAudit]=useState<any[]>([]);
- const [form,setForm]=useState({name:'',email:'',role:'doctor',crm:'',specialty:'',profileId:''});
+ const [form,setForm]=useState({name:'',email:'',role:'doctor',crm:'',specialty:'',profileId:'',doctorId:''});
  const run=async(fn:()=>Promise<void>)=>{setBusy(true);setMessage('');try{await fn();}catch(e:any){setMessage(e.message||'Operação não confirmada.');}finally{setBusy(false);}};
  const staff=async(body:any)=>{
   const {data,error}=await supabase.functions.invoke('staff-access',{body});
-  if(error||data?.error)throw Error(data?.error||'Servidor não confirmou a solicitação da equipe.');
+  if(error||data?.error){
+   let detail=data?.error;
+   if(!detail&&error?.context instanceof Response){
+    try{detail=(await error.context.json())?.error;}catch{/* A network failure may have no JSON response. */}
+   }
+   throw Error(typeof detail==='string'?detail:'Servidor não confirmou a solicitação da equipe. Verifique sua conexão e tente novamente.');
+  }
   return data;
  };
  const exportBackup=()=>run(async()=>{
@@ -43,17 +49,32 @@ export const OperationalCenter:React.FC<{db:AppDatabase;user:User;onReload:()=>P
   <p className="text-slate-600">Gravações exigem confirmação do servidor. Sessões são encerradas após 10 minutos sem atividade; rascunhos locais são criptografados por usuário.</p>
   {message&&<p role="status" className="rounded-xl border p-4 bg-amber-50 text-slate-800">{message}</p>}
   {team?<><form className="bg-white border rounded-xl p-5 grid gap-3 md:grid-cols-2" onSubmit={e=>{e.preventDefault();void run(async()=>{
-   await storage.syncToCloud(db,user.clinicId);await staff({action:'invite',...form});await onReload();
+   await storage.syncToCloud(db,user.clinicId);
+   const result=await staff({action:'invite',...form});
+   if(result?.invited!==true)throw Error('O servidor não confirmou o envio do convite.');
+   setForm({name:'',email:'',role:'doctor',crm:'',specialty:'',profileId:'',doctorId:''});
    setMessage('Convite aceito pelo provedor. A pessoa entra com o e-mail e define a própria senha no link; o recebimento precisa ser confirmado por ela.');
+   try{await onReload();}catch{setMessage('Convite aceito pelo provedor, mas a lista não foi atualizada. Recarregue os dados antes de tentar novamente; não reenvie o convite.');}
   });}}>
    <h3 className="font-semibold md:col-span-2">Convidar por e-mail — sem senha criada pelo administrador</h3>
-   <select aria-label="Cadastro legado" value={form.profileId} onChange={e=>{const u=db.users.find(u=>u.id===e.target.value);setForm({...form,profileId:e.target.value,name:u?.name||'',role:u?.role||'doctor'});}}>
+   <select aria-label="Cadastro legado" value={form.profileId} onChange={e=>{const u=db.users.find(u=>u.id===e.target.value);setForm({...form,profileId:e.target.value,name:u?.name||'',role:u?.role||'doctor',doctorId:'',email:''});}}>
     <option value="">Novo acesso</option>{db.users.filter(u=>!(u as any).authUserId).map(u=><option key={u.id} value={u.id}>Vincular cadastro: {u.name}</option>)}
    </select>
    <input required placeholder="Nome completo" aria-label="Nome completo" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
    <input type="email" required placeholder="E-mail de acesso" aria-label="E-mail de acesso" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/>
-   <select aria-label="Perfil de acesso" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="doctor">Médico / profissional clínico</option><option value="collaborator">Colaborador</option><option value="secretaria">Secretaria</option><option value="tesouraria">Tesouraria</option><option value="admin">Administrador</option></select>
-   {form.role==='doctor'&&!db.users.find(u=>u.id===form.profileId)?.doctorId&&<><input required placeholder="Registro profissional" value={form.crm} onChange={e=>setForm({...form,crm:e.target.value})}/><input required placeholder="Especialidade" value={form.specialty} onChange={e=>setForm({...form,specialty:e.target.value})}/></>}
+   <select aria-label="Perfil de acesso" value={form.role} onChange={e=>setForm({...form,role:e.target.value,doctorId:''})}><option value="doctor">Médico / profissional clínico</option><option value="collaborator">Colaborador</option><option value="secretaria">Secretaria</option><option value="tesouraria">Tesouraria</option><option value="admin">Administrador</option></select>
+   {form.role==='doctor'&&!db.users.find(u=>u.id===form.profileId)?.doctorId&&<>
+    <label className="grid gap-1 md:col-span-2">Ficha profissional
+     <select aria-label="Ficha profissional" value={form.doctorId} onChange={e=>{
+      const doctor=db.doctors.find(d=>d.id===e.target.value);
+      setForm({...form,doctorId:e.target.value,name:doctor?.name||form.name,email:doctor?.email||form.email});
+     }}>
+      <option value="">Criar uma nova ficha profissional</option>
+      {db.doctors.filter(d=>d.clinicId===user.clinicId&&!db.users.some(u=>u.doctorId===d.id)).map(d=><option key={d.id} value={d.id}>Usar ficha existente: {d.name}</option>)}
+     </select>
+    </label>
+    {!form.doctorId&&<><input required aria-label="Registro profissional" placeholder="Registro profissional" value={form.crm} onChange={e=>setForm({...form,crm:e.target.value})}/><input required aria-label="Especialidade" placeholder="Especialidade" value={form.specialty} onChange={e=>setForm({...form,specialty:e.target.value})}/></>}
+   </>}
    <button disabled={busy} className="bg-teal-700 text-white rounded-lg p-3 md:col-span-2">Enviar convite</button>
   </form>
   <div className="bg-white border rounded-xl divide-y">{db.users.map(u=><div key={u.id} className="p-4 flex flex-wrap gap-3 items-center">

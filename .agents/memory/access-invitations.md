@@ -27,3 +27,14 @@ confirm an email, reactivate a disabled account or change its identity binding.
 Keep staff email login and patient CPF login unchanged. Keep email-based
 password recovery available alongside direct administrative changes; the owner
 explicitly requested an additional option, not replacement of the existing flow.
+
+Do not delete the Auth identity as compensation for a failed invitation binding
+unless ownership of a newly created identity is proven.
+
+**Why:** An invitation operation can involve an existing unconfirmed identity.
+A later profile-save error is not evidence that the identity is disposable.
+
+**How to apply:** Preserve existing professional records and accounts, deny
+clinical access until the binding is confirmed, and report mail acceptance
+separately from profile persistence. Retries must reuse the intended professional
+record rather than creating a duplicate.

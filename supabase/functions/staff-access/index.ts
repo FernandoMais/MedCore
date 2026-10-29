@@ -74,7 +74,7 @@ Deno.serve(async request=>{
    const email=target.data.user?.email;
    if(target.error||!email)return reply({error:"Vínculo do e-mail precisa ser revisado."},409);
    const sent=await service.auth.resetPasswordForEmail(email,{redirectTo});
-   return sent.error?reply({error:"O provedor não confirmou o envio. Tente novamente mais tarde."},502):reply({sent:true});
+   return sent.error?reply(mailFailure(sent.error),mailStatus(sent.error)):reply({sent:true});
   }
   const email=String(body.email||"").trim().toLowerCase();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return reply({error:"Informe um e-mail válido."},400);
@@ -87,29 +87,75 @@ Deno.serve(async request=>{
    existing=found.data;
   }
   let doctorId=existing?.doctor_id||null,createdDoctor=false;
+  if(body.doctorId){
+   if(body.role!=="doctor"||(doctorId&&doctorId!==body.doctorId))return reply({error:"O vínculo profissional informado não corresponde a este cadastro."},409);
+   const found=await service.from("doctors").select("id").eq("id",String(body.doctorId)).eq("clinicId",clinic).maybeSingle();
+   if(found.error||!found.data)return reply({error:"Ficha profissional não encontrada nesta clínica."},404);
+   doctorId=found.data.id;
+  }
+  // Match only unambiguous clinic-owned professional contact information.
+  // Never create a second clinical record just because access was not invited yet.
+  if(body.role==="doctor"&&!doctorId){
+   const found=await service.from("doctors").select("id").eq("clinicId",clinic).ilike("email",email.replace(/[%_]/g,"\\$&")).limit(2);
+   if(found.error)return reply({error:"Não foi possível conferir a ficha profissional. Nenhum convite foi enviado."},503);
+   if(found.data.length>1)return reply({error:"Há mais de uma ficha com este e-mail. Selecione a ficha profissional correta."},409);
+   doctorId=found.data[0]?.id||null;
+  }
+  if(doctorId){
+   if(body.role!=="doctor")return reply({error:"Mantenha o perfil clínico ao vincular uma ficha profissional."},409);
+   const linked=await service.from("users").select("id").eq("doctor_id",doctorId).eq("clinicId",clinic).limit(2);
+   if(linked.error)return reply({error:"Não foi possível conferir os vínculos. Nenhum convite foi enviado."},503);
+   if(linked.data.some(p=>p.id!==existing?.id))return reply({error:"Esta ficha já possui um acesso. Utilize a recuperação ou a alteração de senha da conta existente."},409);
+  }
+  const duplicate=await service.from("users").select("id").eq("clinicId",clinic).ilike("username",email.replace(/[%_]/g,"\\$&")).limit(2);
+  if(duplicate.error)return reply({error:"Não foi possível conferir a conta. Nenhum convite foi enviado."},503);
+  if(duplicate.data.some(p=>p.id!==existing?.id))return reply({error:"Este e-mail já possui cadastro de acesso. Utilize a conta existente ou selecione seu cadastro para vincular."},409);
+  let newDoctor=false;
   if(body.role==="doctor"&&!doctorId){
    if(!String(body.crm||"").trim()||!String(body.specialty||"").trim())return reply({error:"Informe registro profissional e especialidade."},400);
+   const matching=await service.from("doctors").select("id").eq("clinicId",clinic).eq("crm",String(body.crm).trim()).limit(1);
+   if(matching.error)return reply({error:"Não foi possível conferir o registro profissional."},503);
+   if(matching.data.length)return reply({error:"Já existe uma ficha com este registro profissional. Selecione a ficha existente para não duplicá-la."},409);
    doctorId=crypto.randomUUID();
+   newDoctor=true;
   }
   const invited=await service.auth.admin.inviteUserByEmail(email,{redirectTo});
-  if(invited.error||!invited.data.user)return reply({error:"Não foi possível enviar o convite. Verifique o provedor e se este e-mail já possui outra conta."},502);
+  if(invited.error)return reply(mailFailure(invited.error),mailStatus(invited.error));
+  if(!invited.data.user)return reply({error:"O provedor não confirmou o convite. Nenhum vínculo foi criado."},502);
   const uid=invited.data.user.id;
+  const bound=await service.from("users").select("id,clinicId").eq("authUserId",uid).limit(2);
+  const patientBound=await service.from("patients").select("id").eq("authUserId",uid).limit(1);
+  if(bound.error||patientBound.error||bound.data.some(p=>p.id!==existing?.id)||patientBound.data.length){
+   return reply({error:"O e-mail foi processado pelo provedor, mas a identidade já tem outro vínculo ou não pôde ser conferida. Nenhum acesso foi substituído; solicite revisão administrativa."},409);
+  }
   try {
    const rechecked=await service.from("users").select("id").eq("id",actor.id).eq("authUserId",verified.data.user.id).eq("clinicId",clinic).eq("role","admin").eq("active",true).maybeSingle();
    if(rechecked.error||!rechecked.data)throw Error("authority");
-   if(doctorId&&!existing?.doctor_id){
+   if(newDoctor){
     const inserted=await service.from("doctors").insert({id:doctorId,name,crm:String(body.crm).trim(),specialty:String(body.specialty).trim(),email,phone:String(body.phone||""),"clinicId":clinic,active:true,availableTimes:[{dayOfWeek:"Segunda",startTime:"08:00",endTime:"18:00"}]});
     if(inserted.error)throw Error("doctor");
     createdDoctor=true;
    }
    const profile={id:existing?.id||crypto.randomUUID(),username:email,name,role:body.role,doctor_id:doctorId,clinicId:clinic,authUserId:uid,active:true,password:""};
-   const saved=existing?await service.from("users").update(profile).eq("id",existing.id).eq("clinicId",clinic):await service.from("users").insert(profile);
-   if(saved.error)throw Error("profile");
+   const saved=existing?await service.from("users").update(profile).eq("id",existing.id).eq("clinicId",clinic).is("authUserId",null).select("id"):await service.from("users").insert(profile).select("id");
+   if(saved.error||saved.data?.length!==1)throw Error("profile");
    return reply({invited:true,email});
   } catch {
-   await service.auth.admin.deleteUser(uid);
+   // inviteUserByEmail may return an already-existing unconfirmed identity.
+   // Never delete an account whose creation/ownership cannot be proven.
    if(createdDoctor)await service.from("doctors").delete().eq("id",doctorId).eq("clinicId",clinic);
-   return reply({error:"O vínculo não foi salvo. O convite foi invalidado; revise o cadastro antes de reenviar."},500);
+   return reply({error:"O provedor aceitou o convite, mas o vínculo não foi salvo. O acesso à clínica não foi liberado. Solicite revisão antes de reenviar; nenhuma conta existente foi apagada."},500);
   }
  }catch {return reply({error:"Não foi possível concluir a solicitação."},500);}
 });
+
+function mailStatus(error:{code?:string;status?:number}){
+ return error.status===429||error.code==="over_email_send_rate_limit"||error.code==="over_email_send_rate_limit_per_user"?429:
+  error.code==="email_exists"||error.code==="user_already_exists"?409:502;
+}
+function mailFailure(error:{code?:string;status?:number}){
+ const status=mailStatus(error);
+ return {error:status===429?"O limite de envio de e-mails foi atingido. Aguarde antes de tentar novamente; não faça envios repetidos.":
+  status===409?"Este e-mail já possui uma conta autenticada. Use a recuperação de senha ou solicite revisão do vínculo, sem criar outra conta.":
+  "O provedor de e-mail não confirmou o envio. A administração deve verificar a autenticação SMTP, a senha da caixa postal e a permissão para aplicativos externos. Nenhum acesso foi liberado por esta solicitação."};
+}
